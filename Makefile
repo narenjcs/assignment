@@ -16,10 +16,8 @@ prereqs: ## Check CLIs + cloud sessions
 samples: .venv/bin/ruff ## Generate 2-page sample DOCX + PDF into samples/
 	@.venv/bin/python samples/make_samples.py
 
-build: build-lambdas build-agents build-frontend ## Build all deployable artifacts (no Docker needed)
-
-build-lambdas: ## Vendor Python deps for Lambdas + compile Node API Lambda
-	@bash aws/lambdas/build.sh
+build: build-agents build-frontend ## Build all deployable artifacts (no Docker needed)
+	@echo "Lambdas need no pre-build: CDK's NodejsFunction bundles them with esbuild at synth time."
 
 build-agents: ## Package AgentCore runtime zips (arm64 deps via uv)
 	@bash aws/agents/build.sh
@@ -73,4 +71,4 @@ destroy: ## Tear down AWS stack and Databricks bundle
 	@cd aws/infra && npx cdk destroy --force
 	@cd databricks && databricks bundle destroy --auto-approve -p $(DATABRICKS_CONFIG_PROFILE) || true
 
-.PHONY: help venv prereqs samples build build-lambdas build-agents build-frontend deploy-aws deploy-databricks link e2e dev-frontend destroy lint format test check hooks
+.PHONY: help venv prereqs samples build build-agents build-frontend deploy-aws deploy-databricks link e2e dev-frontend destroy lint format test check hooks

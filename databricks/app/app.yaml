@@ -5,30 +5,30 @@
 # app.yaml format. UNVERIFIED offline beyond that: no workspace is available to actually
 # `databricks apps deploy` against (see deploy report).
 command:
-  - "uvicorn"
-  - "docintel_app.server:build_app"
-  - "--factory"
-  - "--host"
-  - "0.0.0.0"
-  - "--port"
-  - "$DATABRICKS_APP_PORT"
+  - 'uvicorn'
+  - 'docintel_app.server:build_app'
+  - '--factory'
+  - '--host'
+  - '0.0.0.0'
+  - '--port'
+  - '$DATABRICKS_APP_PORT'
 
 env:
-  - name: "DOCINTEL_CATALOG"
-    value: "docintel"
-  - name: "DOCINTEL_SCHEMA"
-    value: "docs"
-  - name: "DATABRICKS_WAREHOUSE_ID"
-    value_from: "sql-warehouse"
-  - name: "DATABRICKS_LLM_ENDPOINT"
-    value_from: "llm-endpoint"
-  - name: "AWS_GATEWAY_URL"
-    value_from: "aws-gateway-url"
-  - name: "AWS_MCP_TOKEN_URL"
-    value_from: "aws-mcp-token-url"
-  - name: "AWS_MCP_CLIENT_ID"
-    value_from: "aws-mcp-client-id"
-  - name: "AWS_MCP_CLIENT_SECRET"
-    value_from: "aws-mcp-client-secret"
-  - name: "AWS_MCP_SCOPE"
-    value_from: "aws-mcp-scope"
+  - name: 'DOCINTEL_CATALOG'
+    value: 'docintel'
+  - name: 'DOCINTEL_SCHEMA'
+    value: 'docs'
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    value_from: 'sql-warehouse'
+  - name: 'DATABRICKS_LLM_ENDPOINT'
+    value_from: 'llm-endpoint'
+  - name: 'AWS_GATEWAY_URL'
+    value_from: 'aws-gateway-url'
+  - name: 'AWS_MCP_TOKEN_URL'
+    value_from: 'aws-mcp-token-url'
+  - name: 'AWS_MCP_CLIENT_ID'
+    value_from: 'aws-mcp-client-id'
+  - name: 'AWS_MCP_CLIENT_SECRET'
+    value_from: 'aws-mcp-client-secret'
+  - name: 'AWS_MCP_SCOPE'
+    value_from: 'aws-mcp-scope'
