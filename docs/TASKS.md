@@ -71,6 +71,6 @@ All 41 build tasks complete. 426 tests green across six workspaces (lambdas 174,
 
 ## Blocked on Naren
 - [!] B1 `aws login`
-- [!] B2 `databricks auth login --host <ws> --profile docintel`
+- [!] B2 Databricks on **AWS** (decided 2026-09-24): create/obtain an AWS-hosted workspace, then `databricks auth login --host https://dbc-*.cloud.databricks.com --profile docintel`
 - [x] B3 Bedrock model: resolved without the Anthropic form → `openai.gpt-oss-120b-1:0` (fallback Nova 2 Lite)
 - [!] B4 Databricks workspace prerequisites (UC, serverless, Apps, SQL warehouse id, FMAPI endpoint name)

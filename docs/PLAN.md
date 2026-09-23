@@ -214,16 +214,17 @@ All tools return `{ok: true, data} | {ok: false, error: {code, message}}`. Pinne
 
 ## 4. Databricks side plan (Asset Bundle, profile `docintel`)
 
-1. **Auth**: `databricks auth login --host <ws> --profile docintel` (new profile; do not use `dev`/`prod`).
-2. **Prerequisites in workspace**: Unity Catalog enabled, serverless compute enabled, Databricks Apps enabled, a serverless SQL warehouse (for `ai_parse_document`), Foundation Model API endpoint (`databricks-gpt-oss-120b` or equivalent) visible in Serving.
-3. **Bundle resources** (`databricks/databricks.yml`):
+1. **Cloud**: **Databricks on AWS** (decided 2026-09-24). The code is cloud-agnostic — the workspace is addressed only through the CLI profile — but an AWS-hosted workspace keeps the demo on one provider and leaves the door open to swap the presigned-URL handoff for a native S3 external location. An AWS host looks like `https://dbc-xxxxxxxx-xxxx.cloud.databricks.com`.
+2. **Auth**: `databricks auth login --host <ws> --profile docintel` (new profile; do not use `dev`/`prod`, which are Azure workspaces belonging to another project).
+3. **Prerequisites in workspace**: Unity Catalog enabled, serverless compute enabled, Databricks Apps enabled, a serverless SQL warehouse (for `ai_parse_document`), Foundation Model API endpoint (`databricks-gpt-oss-120b` or equivalent) visible in Serving.
+4. **Bundle resources** (`databricks/databricks.yml`):
    - `schemas.docs` in catalog `docintel` (catalog created by script if missing; falls back to `main` via variable).
    - `volumes.inbox` (managed volume).
    - `jobs.docintel_pdf_agent` — serverless `spark_python_task`, params `job_id`, `download_url`, `file_name`; environment deps declared inline in `resources/jobs.yml` (DAB `compute.Environment.dependencies` has no file reference).
    - `apps.mcp_docintel` — source `databricks/app`, resources: secret scope `docintel`, SQL warehouse.
-4. **Setup step** (`scripts/deploy-databricks.sh`): create secret scope `docintel`, create service principal `docintel-aws` + OAuth secret, grant `USE CATALOG/USE SCHEMA/READ VOLUME/WRITE VOLUME/SELECT/MODIFY` on `docintel.docs`, grant SP `CAN_USE` on the app and `CAN_MANAGE_RUN` on the job, create the Delta table (idempotent DDL), run `bundle deploy`, start the app.
-5. **App runtime**: FastAPI on port 8000; MCP mounted at `/mcp` and `/api/mcp`; REST `GET /api/health`, `POST /api/agent/run`. Table ensured on startup.
-6. **Job runtime**: same package; reads secrets with `dbutils.secrets`; writes results to the UC table and reports back to AWS via MCP.
+5. **Setup step** (`scripts/deploy-databricks.sh`): create secret scope `docintel`, create service principal `docintel-aws` + OAuth secret, grant `USE CATALOG/USE SCHEMA/READ VOLUME/WRITE VOLUME/SELECT/MODIFY` on `docintel.docs`, grant SP `CAN_USE` on the app and `CAN_MANAGE_RUN` on the job, create the Delta table (idempotent DDL), run `bundle deploy`, start the app.
+6. **App runtime**: FastAPI on port 8000; MCP mounted at `/mcp` and `/api/mcp`; REST `GET /api/health`, `POST /api/agent/run`. Table ensured on startup.
+7. **Job runtime**: same package; reads secrets with `dbutils.secrets`; writes results to the UC table and reports back to AWS via MCP.
 
 ## 5. Cross-cloud wiring (`make link`)
 1. Read CDK outputs → write Databricks secrets: `aws_gateway_url`, `aws_mcp_client_id`, `aws_mcp_client_secret`, `aws_mcp_token_url`, `aws_mcp_scope`.
