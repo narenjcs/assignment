@@ -1,0 +1,42 @@
+# Databricks App hosting the MCP server (streamable-HTTP /mcp, /api/mcp) and the sync PDF agent.
+# App name starts with "mcp-" so it is recognised as an MCP server (PLAN.md §4, task brief).
+resources:
+  apps:
+    mcp_docintel:
+      name: mcp-docintel
+      description: DocIntel MCP server + PDF agent (FastAPI on Databricks Apps).
+      source_code_path: ../app
+      resources:
+        - name: aws-gateway-url
+          secret:
+            scope: ${var.aws_secret_scope}
+            key: aws_gateway_url
+            permission: READ
+        - name: aws-mcp-token-url
+          secret:
+            scope: ${var.aws_secret_scope}
+            key: aws_mcp_token_url
+            permission: READ
+        - name: aws-mcp-client-id
+          secret:
+            scope: ${var.aws_secret_scope}
+            key: aws_mcp_client_id
+            permission: READ
+        - name: aws-mcp-client-secret
+          secret:
+            scope: ${var.aws_secret_scope}
+            key: aws_mcp_client_secret
+            permission: READ
+        - name: aws-mcp-scope
+          secret:
+            scope: ${var.aws_secret_scope}
+            key: aws_mcp_scope
+            permission: READ
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: llm-endpoint
+          serving_endpoint:
+            name: ${var.llm_endpoint}
+            permission: CAN_QUERY

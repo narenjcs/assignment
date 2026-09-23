@@ -1,0 +1,19 @@
+# Local tooling for lint/test/scripts (Python 3.12). Installed by `make venv` into ./.venv
+ruff==0.16.8
+ty==0.0.32
+pytest==9.0.2
+pydantic==2.12.5
+boto3==1.43.100
+botocore[crt]==1.43.100
+python-docx==1.2.0
+reportlab==5.0.1
+# agent + databricks libraries (needed by tests and ty)
+strands-agents==1.57.0
+bedrock-agentcore==1.23.1
+mcp==2.1.1
+databricks-sdk==0.140.0
+pypdf==6.19.0
+fastapi==0.141.1
+uvicorn==0.53.0
+openai==3.19.0
+httpx==0.28.1

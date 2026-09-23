@@ -1,0 +1,28 @@
+# DocIntel Databricks Asset Bundle (PLAN.md §4). Profile `docintel` only — never `dev`/`prod`.
+bundle:
+  name: docintel
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that owns the docs schema, volume and table.
+    default: docintel
+  schema:
+    description: Unity Catalog schema for the inbox volume and document_results table.
+    default: docs
+  warehouse_id:
+    description: Serverless SQL warehouse id used for ai_parse_document OCR and table writes.
+  llm_endpoint:
+    description: Foundation Model API serving endpoint used for enrichment.
+    default: databricks-gpt-oss-120b
+  aws_secret_scope:
+    description: Databricks secret scope holding the AWS MCP Gateway credentials.
+    default: docintel
+
+targets:
+  dev:
+    default: true
+    workspace:
+      profile: docintel

@@ -1,0 +1,97 @@
+[
+  {
+    "name": "get_job",
+    "description": "Fetch a document-processing job (status, file metadata, agent event trace, and result if finished) from the DocIntel job store in DynamoDB.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "job_id": { "type": "string", "description": "Job id (uuid)" } },
+      "required": ["job_id"]
+    }
+  },
+  {
+    "name": "list_jobs",
+    "description": "List recent document-processing jobs, newest first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": { "type": "integer", "description": "Max jobs to return (default 20)" }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "update_job_status",
+    "description": "Set the job status (UPLOADED|QUEUED|PROCESSING|COMPLETED|FAILED) and append a trace event describing who did what. Call this whenever a processing stage starts or finishes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "job_id": { "type": "string" },
+        "status": {
+          "type": "string",
+          "description": "One of UPLOADED, QUEUED, PROCESSING, COMPLETED, FAILED"
+        },
+        "message": { "type": "string", "description": "Human readable progress note" },
+        "source": { "type": "string", "description": "aws | databricks | orchestrator" },
+        "agent": {
+          "type": "string",
+          "description": "Agent name, e.g. orchestrator, docx-agent, databricks-pdf-agent"
+        },
+        "tool": { "type": "string", "description": "Tool or step name" },
+        "processor": { "type": "string", "description": "aws-docx-agent | databricks-pdf-agent" }
+      },
+      "required": ["job_id", "status"]
+    }
+  },
+  {
+    "name": "append_job_event",
+    "description": "Append a trace event to the job without changing its status (for fine-grained progress like 'OCR complete, 2 pages').",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "job_id": { "type": "string" },
+        "source": { "type": "string", "description": "aws | databricks | orchestrator" },
+        "agent": { "type": "string" },
+        "tool": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "required": ["job_id", "source", "message"]
+    }
+  },
+  {
+    "name": "save_job_result",
+    "description": "Persist the final structured result for a job (summary, keyPoints, entities, topics, sentiment, language, pageCount, wordCount, extractionMethod, model and any Databricks references) and mark it COMPLETED unless another status is given.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "job_id": { "type": "string" },
+        "result_json": { "type": "string", "description": "JSON object serialised as a string" },
+        "processor": { "type": "string", "description": "aws-docx-agent | databricks-pdf-agent" },
+        "status": { "type": "string", "description": "Defaults to COMPLETED" },
+        "source": { "type": "string", "description": "aws | databricks | orchestrator" },
+        "agent": { "type": "string" }
+      },
+      "required": ["job_id", "result_json", "processor"]
+    }
+  },
+  {
+    "name": "extract_docx_text",
+    "description": "Download the job's DOCX from S3 and extract its text (paragraphs, headings, tables), word count and estimated page count. Only valid for docType=docx.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "job_id": { "type": "string" } },
+      "required": ["job_id"]
+    }
+  },
+  {
+    "name": "get_download_url",
+    "description": "Create a short-lived presigned HTTPS URL so an external system (e.g. the Databricks PDF agent) can download the job's document from S3.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "job_id": { "type": "string" },
+        "expires_seconds": { "type": "integer", "description": "Default 900, max 3600" }
+      },
+      "required": ["job_id"]
+    }
+  }
+]

@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+/* Small DocIntel brand palette (Tailwind 4 CSS-first theme, see
+   https://tailwindcss.com/docs/theme). Each token below generates the usual
+   bg-/text-/border-brand-* utilities used by Badge and the app header. */
+@theme {
+  --color-brand-aws: #ff9900;
+  --color-brand-databricks: #ff3621;
+  --color-brand-orchestrator: #475569;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+}

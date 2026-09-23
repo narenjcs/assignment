@@ -1,0 +1,9 @@
+# Managed UC volume the PDF agent downloads AWS-hosted PDFs into before extraction.
+resources:
+  volumes:
+    inbox:
+      name: inbox
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.docs.name}
+      volume_type: MANAGED
+      comment: DocIntel PDF inbox — files ingested from AWS S3 via presigned URL.

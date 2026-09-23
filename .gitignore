@@ -1,0 +1,37 @@
+# env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+cdk-outputs.json
+databricks/.databricks/
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+# node
+node_modules/
+.next/
+cdk.out/
+frontend/dist/
+aws/lambdas/api/dist/
+# misc
+.DS_Store
+*.log
+*.zip
+samples/*.docx
+samples/*.pdf
+
+# tooling caches
+.ruff_cache/
+.kilo/
+
+# local tool config (machine-specific)
+.claude/
+.serena/

@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node"],
+    // aws-cdk-lib's own .d.ts files are not exactOptionalPropertyTypes-clean (e.g. IBucket vs.
+    // Bucket disagree on `isWebsite?: boolean` under this flag — a known upstream limitation,
+    // not something a consumer can work around). Scoped to this workspace only.
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["bin", "lib", "tests"]
+}

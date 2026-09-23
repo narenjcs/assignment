@@ -1,0 +1,174 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "DOCX Processing MCP Tools",
+        "version": "1.0.0",
+        "description": "Tools for DOCX document extraction and summarization"
+    },
+    "paths": {
+        "/extract_docx_text": {
+            "post": {
+                "operationId": "extract_docx_text",
+                "summary": "Extract full text content from a DOCX file stored in S3",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "s3_key"
+                                ],
+                                "properties": {
+                                    "s3_key": {
+                                        "type": "string",
+                                        "description": "S3 object key of the DOCX file"
+                                    },
+                                    "s3_bucket": {
+                                        "type": "string",
+                                        "description": "S3 bucket name (optional, uses default)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Extracted text content",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "text": {
+                                            "type": "string"
+                                        },
+                                        "char_count": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/store_summary": {
+            "post": {
+                "operationId": "store_summary",
+                "summary": "Store the generated document summary to S3 and DynamoDB",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "job_id",
+                                    "summary"
+                                ],
+                                "properties": {
+                                    "job_id": {
+                                        "type": "string",
+                                        "description": "Unique job identifier"
+                                    },
+                                    "summary": {
+                                        "type": "string",
+                                        "description": "Generated document summary"
+                                    },
+                                    "doc_type": {
+                                        "type": "string",
+                                        "description": "Document type: DOCX or PDF"
+                                    },
+                                    "s3_key": {
+                                        "type": "string",
+                                        "description": "Original S3 key of the document"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Storage confirmation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "result_key": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/invoke_bedrock_model": {
+            "post": {
+                "operationId": "invoke_bedrock_model",
+                "summary": "Invoke Claude model for text enrichment and analysis",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "prompt"
+                                ],
+                                "properties": {
+                                    "prompt": {
+                                        "type": "string",
+                                        "description": "The prompt to send to the model"
+                                    },
+                                    "system_prompt": {
+                                        "type": "string",
+                                        "description": "Optional system prompt"
+                                    },
+                                    "max_tokens": {
+                                        "type": "integer",
+                                        "description": "Max tokens in response",
+                                        "default": 4096
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Model response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "text": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

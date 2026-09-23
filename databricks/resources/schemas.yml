@@ -1,0 +1,7 @@
+# Unity Catalog schema that owns the inbox volume and document_results table.
+resources:
+  schemas:
+    docs:
+      name: ${var.schema}
+      catalog_name: ${var.catalog}
+      comment: DocIntel PDF inbox volume and document_results table.

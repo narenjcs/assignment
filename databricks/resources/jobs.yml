@@ -1,0 +1,52 @@
+# Serverless job that runs the PDF agent asynchronously (PLAN.md §2.2 async PDF path).
+resources:
+  jobs:
+    docintel_pdf_agent:
+      name: docintel_pdf_agent
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - mcp==2.1.1
+              - databricks-sdk==0.140.0
+              - pydantic==2.12.5
+              - openai==3.19.0
+              - pypdf==6.19.0
+      parameters:
+        - name: job_id
+          default: ""
+        - name: download_url
+          default: ""
+        - name: file_name
+          default: ""
+        - name: source_s3_key
+          default: ""
+        - name: warehouse_id
+          default: ${var.warehouse_id}
+        - name: llm_endpoint
+          default: ${var.llm_endpoint}
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: secret_scope
+          default: ${var.aws_secret_scope}
+        - name: run_id
+          default: "{{job.run_id}}"
+      tasks:
+        - task_key: run_pdf_agent
+          environment_key: default
+          spark_python_task:
+            python_file: ../jobs/pdf_agent_job.py
+            parameters:
+              - "{{job.parameters.job_id}}"
+              - "{{job.parameters.download_url}}"
+              - "{{job.parameters.file_name}}"
+              - "{{job.parameters.source_s3_key}}"
+              - "{{job.parameters.warehouse_id}}"
+              - "{{job.parameters.llm_endpoint}}"
+              - "{{job.parameters.catalog}}"
+              - "{{job.parameters.schema}}"
+              - "{{job.parameters.secret_scope}}"
+              - "{{job.parameters.run_id}}"

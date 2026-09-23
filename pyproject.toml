@@ -1,0 +1,25 @@
+# Root Python tooling config – applies to aws/agents, aws/common, databricks, scripts, samples.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["node_modules", ".venv", "dist", "build", "cdk.out", "frontend", "reference"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "C90", "ANN", "SIM", "PL", "RUF", "T20"]
+ignore = ["ANN401"]  # allow typing.Any only where explicitly annotated
+per-file-ignores = { "**/tests/**" = ["ANN", "PLR2004", "S101"], "samples/*.py" = ["T20"], "scripts/*.py" = ["T20"] }
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 4
+max-statements = 50
+max-branches = 10
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.environment]
+python-version = "3.12"
+extra-paths = ["aws/common", "databricks/app/src"]

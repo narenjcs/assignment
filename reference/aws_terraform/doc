@@ -1,0 +1,39 @@
+User Browser (ReactJS on S3/CloudFront)
+    │
+    ▼ POST /upload → API Gateway → chat_api Lambda
+    │   Returns pre-signed S3 URL
+    │
+    ▼ PUT file directly to S3 (agentic-ai-docs-<AWS_ACCOUNT_ID>)
+    │   uploads/docx/*.docx  OR  uploads/pdf/*.pdf
+    │
+    ▼ S3 Event → doc-upload-trigger Lambda
+    │   Creates DynamoDB job record (status: QUEUED)
+    │   Async invokes doc-orchestrator-agent Lambda
+    │
+    ▼ doc-orchestrator-agent Lambda
+    ├── IF DOCX ──────────────────────────────────────────────┐
+    │   Invokes Bedrock Agent (docx-summarizer-agent)         │
+    │   Agent calls AWS MCP Server Lambda tools:              │
+    │     → extract_docx_text (python-docx from S3)           │
+    │     → invoke_bedrock_model (Claude Sonnet 4 enrichment) │
+    │     → store_summary (S3 results/ + DynamoDB)            │
+    │   Returns structured summary                            │
+    │                                                         │
+    └── IF PDF ───────────────────────────────────────────────┤
+        Calls Databricks MCP Server (HTTP):                   │
+          → copy_s3_to_volume (S3 → /Volumes/main/agentic_ai) │
+          → process_pdf_with_agent:                           │
+              PyMuPDF OCR extraction                          │
+              AWS Textract fallback for image PDFs            │
+              LangGraph AI Agent (Claude via Databricks FM)   │
+              Persist to main.agentic_ai.document_summaries   │
+        Returns summary + Unity Catalog row                   │
+    │                                                         │
+    ▼ DynamoDB updated (status: COMPLETED + summary)          │
+    │                                                         │
+    ▼ Frontend polls GET /status/{jobId}                      │
+    │   Receives summary, displays in chat                    │
+    │                                                         │
+    ▼ User chats → POST /chat → chat_api Lambda               │
+        Bedrock InvokeModelWithResponseStream (Claude Sonnet 4)
+        Streams response back to browser

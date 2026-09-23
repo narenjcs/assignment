@@ -1,0 +1,12 @@
+# Exact pins (DEVELOPMENT.md G6/G12): must match the interpreter used by `databricks bundle`
+# validation and by the serverless job environment in resources/jobs.yml.
+# `-e .` installs the local `docintel_app` package (pyproject.toml, src/ layout) so
+# `uvicorn docintel_app.server:build_app` is importable in the deployed App — no PYTHONPATH hack.
+-e .
+mcp==2.1.1
+databricks-sdk==0.140.0
+pydantic==2.12.5
+fastapi==0.141.1
+uvicorn==0.53.0
+openai==3.19.0
+pypdf==6.19.0
