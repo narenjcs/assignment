@@ -2,6 +2,7 @@
   "app": "npx tsx bin/docintel.ts",
   "context": {
     "modelId": "openai.gpt-oss-120b-1:0",
-    "stage": "dev"
+    "stage": "dev",
+    "@aws-cdk/cognito:logUserPoolClientSecretValue": false
   }
 }

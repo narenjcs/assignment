@@ -6,17 +6,22 @@ import type * as agentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 import { Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import type { Naming } from './naming.js';
+import { JOB_TTL_DAYS_STRING } from '../constants.js';
 
 const PRESIGN_TTL_SECONDS = '900';
 const MCP_TOOLS_TIMEOUT = Duration.minutes(2);
 const S3_TRIGGER_TIMEOUT = Duration.minutes(5);
+/** Caps concurrent invocations of the public, unauthenticated api Function URL (review round 1,
+ * item 6) — bounds the blast radius/cost of abuse without adding auth, which PLAN.md §2.5 marks
+ * out of scope for this demo. Flagged in the review-round-1 report for sign-off. */
+const API_RESERVED_CONCURRENCY = 20;
 
 /** Env vars every Lambda needs regardless of handler (aws/lambdas/src/lib/config.ts). */
 function baseEnvironment(jobsTable: dynamodb.Table): Record<string, string> {
   return {
     JOBS_TABLE: jobsTable.tableName,
     PRESIGN_TTL_SECONDS,
-    JOB_TTL_DAYS: '7',
+    JOB_TTL_DAYS: JOB_TTL_DAYS_STRING,
     LOG_LEVEL: 'info',
   };
 }
@@ -100,6 +105,9 @@ export class AppLambdas extends Construct {
       memorySize: 1024,
       timeout: Duration.minutes(15),
       bundling: bundling(),
+      // No auth in front of this Function URL (PLAN.md §2.5, out of scope for the demo) — reserved
+      // concurrency caps the blast radius of unauthenticated abuse instead.
+      reservedConcurrentExecutions: API_RESERVED_CONCURRENCY,
       environment: {
         ...baseEnvironment(props.jobsTable),
         UPLOADS_BUCKET: props.uploadsBucket.bucketName,

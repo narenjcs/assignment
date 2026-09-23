@@ -8,30 +8,24 @@ const TEST_ACCOUNT = '111111111111';
 const TEST_REGION = 'us-east-1';
 const TEST_MODEL_ID = 'openai.gpt-oss-120b-1:0';
 
-/**
- * Execution-role wildcard `Resource: "*"` statements that the `Runtime` L2 construct bakes in
- * itself (`node_modules/aws-cdk-lib/aws-bedrockagentcore/lib/runtime/runtime.js`
- * `addExecutionRolePermissions`) and that AWS documents as requiring a `*` resource:
- * X-Ray (no resource-level permissions exist for these actions) and CloudWatch PutMetricData
- * (scoped instead by a `cloudwatch:namespace` condition). Nothing authored in this workspace
- * grants a bare `*`; this is the sole allow-list for the "no wildcard resources" assertion below.
- */
+// `Runtime`'s own `addExecutionRolePermissions` bakes these two Sids in with a bare `*`: X-Ray
+// (no resource-level perms exist) and CloudWatch PutMetricData (scoped by a namespace condition
+// instead). Nothing we author grants a bare `*`; this is the sole allow-list below.
 const ALLOWED_WILDCARD_SIDS = new Set(['XRayAccess', 'CloudWatchMetrics']);
 
-/**
- * The CDK-provided `BucketDeployment` construct's own singleton Lambda role (used by our `Web`
- * construct to invalidate CloudFront after each deploy) unconditionally adds this ungated,
- * Sid-less statement itself whenever a `distribution` is passed
- * (`node_modules/aws-cdk-lib/aws-s3-deployment/lib/bucket-deployment.js`: `props.distribution &&
- * handler.addToRolePolicy(new iam.PolicyStatement({actions: ["cloudfront:GetInvalidation",
- * "cloudfront:CreateInvalidation"], resources: ["*"]}))`) — there is no prop to scope it to our
- * one distribution, so it cannot be tightened from this workspace.
- */
+// The CDK `BucketDeployment` construct's own singleton Lambda role unconditionally adds this
+// ungated, Sid-less statement for CloudFront invalidation with no prop to scope it down.
 const ALLOWED_WILDCARD_ACTION_SETS = [
   ['cloudfront:GetInvalidation', 'cloudfront:CreateInvalidation'],
 ];
 
-function isAllowedWildcardStatement(statement: { Sid?: string; Action?: unknown }): boolean {
+interface Statement {
+  Sid?: string;
+  Action?: unknown;
+  Resource?: unknown;
+}
+
+function isAllowedWildcardStatement(statement: Statement): boolean {
   if (ALLOWED_WILDCARD_SIDS.has(statement.Sid ?? '')) {
     return true;
   }
@@ -39,6 +33,21 @@ function isAllowedWildcardStatement(statement: { Sid?: string; Action?: unknown 
   return ALLOWED_WILDCARD_ACTION_SETS.some(
     (allowed) => allowed.length === actions.length && allowed.every((a) => actions.includes(a)),
   );
+}
+
+// Recursively gathers every string leaf out of a (possibly CFN-intrinsic) template value, good
+// enough to substring-search JSON text CDK has split across an `Fn::Join` around a token.
+function collectStrings(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(collectStrings);
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap(collectStrings);
+  }
+  return [];
 }
 
 let template: Template;
@@ -76,6 +85,15 @@ describe('storage', () => {
           Match.objectLike({ ErrorCode: 404, ResponseCode: 200, ResponsePagePath: '/index.html' }),
         ]),
       }),
+    });
+  });
+
+  it('expires uploads on the same TTL as job records (review round 1, item 7)', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: naming.uploadsBucket,
+      LifecycleConfiguration: {
+        Rules: Match.arrayWith([Match.objectLike({ ExpirationInDays: 7, Status: 'Enabled' })]),
+      },
     });
   });
 });
@@ -133,6 +151,50 @@ describe('gateway', () => {
   });
 });
 
+describe('cognito client secret handling (review round 1, item 9)', () => {
+  it('never materializes the aws-mcp secret SecretString as a literal plaintext string', () => {
+    const secrets = template.findResources('AWS::SecretsManager::Secret', {
+      Properties: { Name: naming.awsMcpSecret },
+    });
+    const matches = Object.values(secrets);
+    expect(matches.length).toBe(1);
+    const secretString = (matches[0] as { Properties: { SecretString?: unknown } }).Properties
+      .SecretString;
+    // A literal plaintext value would synthesize as a bare JS string; CDK's clientSecret token
+    // always resolves to an intrinsic (Fn::Join/Fn::GetAtt) object instead.
+    expect(typeof secretString).not.toBe('string');
+  });
+
+  it('suppresses CloudWatch response logging on the Cognito DescribeUserPoolClient lookup', () => {
+    // CDK's `userPoolClientSecret` getter gives its own custom resource an explicit
+    // `resourceType: "Custom::DescribeCognitoUserPoolClient"` override, so it does not show up
+    // under the generic `Custom::AWS` type used elsewhere in this stack (e.g. the force-delete
+    // custom resources in `force-delete-secret.ts`).
+    const describeCalls = template.findResources('Custom::DescribeCognitoUserPoolClient');
+    expect(Object.keys(describeCalls).length).toBeGreaterThan(0);
+    for (const resource of Object.values(describeCalls)) {
+      const text = collectStrings((resource as { Properties?: unknown }).Properties).join('');
+      expect(text).toContain('describeUserPoolClient');
+      expect(text).toContain('"logApiResponseData":false');
+    }
+  });
+});
+
+describe('secret force-delete on destroy (review round 1, item 5)', () => {
+  it('force-deletes both the databricks and aws-mcp secrets instead of a 30-day recovery window', () => {
+    const customResources = template.findResources('Custom::AWS');
+    const forceDeletes = Object.values(customResources).filter((resource) => {
+      const del = (resource as { Properties?: { Delete?: unknown } }).Properties?.Delete;
+      const text = collectStrings(del).join('');
+      return (
+        text.includes('"action":"deleteSecret"') &&
+        text.includes('"ForceDeleteWithoutRecovery":true')
+      );
+    });
+    expect(forceDeletes.length).toBe(2);
+  });
+});
+
 describe('runtimes', () => {
   it('creates exactly two AgentCore runtimes', () => {
     template.resourceCountIs('AWS::BedrockAgentCore::Runtime', 2);
@@ -156,6 +218,41 @@ describe('runtimes', () => {
       AgentRuntimeName: naming.orchestratorRuntimeName,
     });
   });
+
+  it('gives both runtimes GATEWAY_URL and AWS_MCP_SECRET_ARN (review round 1, item 1)', () => {
+    const runtimes = template.findResources('AWS::BedrockAgentCore::Runtime');
+    const envVarsList = Object.values(runtimes).map(
+      (resource) =>
+        (resource as { Properties: { EnvironmentVariables?: Record<string, unknown> } }).Properties
+          .EnvironmentVariables,
+    );
+    expect(envVarsList.length).toBe(2);
+    for (const envVars of envVarsList) {
+      expect(envVars).toBeDefined();
+      expect(envVars?.GATEWAY_URL).toBeDefined();
+      expect(envVars?.AWS_MCP_SECRET_ARN).toBeDefined();
+    }
+  });
+
+  it('grants secretsmanager:GetSecretValue to both runtime execution roles (review round 1, item 1)', () => {
+    const policies = Object.entries(template.findResources('AWS::IAM::Policy'));
+
+    for (const roleSubstring of ['DocxRuntimeExecutionRole', 'OrchestratorRuntimeExecutionRole']) {
+      const roleStatements = policies
+        .filter(([logicalId]) => logicalId.includes(roleSubstring))
+        .flatMap(
+          ([, policy]) =>
+            (policy as { Properties: { PolicyDocument: { Statement: Statement[] } } }).Properties
+              .PolicyDocument.Statement,
+        );
+
+      const hasGetSecretValue = roleStatements.some((statement) => {
+        const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+        return actions.includes('secretsmanager:GetSecretValue');
+      });
+      expect(hasGetSecretValue).toBe(true);
+    }
+  });
 });
 
 describe('lambdas', () => {
@@ -169,7 +266,7 @@ describe('lambdas', () => {
     }
   });
 
-  it('gives every app Lambda the JOBS_TABLE env var', () => {
+  it('gives every app Lambda the JOBS_TABLE and JOB_TTL_DAYS env vars', () => {
     for (const name of [
       naming.resource('mcp-tools'),
       naming.resource('api'),
@@ -177,9 +274,18 @@ describe('lambdas', () => {
     ]) {
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: name,
-        Environment: { Variables: Match.objectLike({ JOBS_TABLE: Match.anyValue() }) },
+        Environment: {
+          Variables: Match.objectLike({ JOBS_TABLE: Match.anyValue(), JOB_TTL_DAYS: '7' }),
+        },
       });
     }
+  });
+
+  it("caps the api Lambda's reserved concurrency (review round 1, item 6)", () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: naming.resource('api'),
+      ReservedConcurrentExecutions: 20,
+    });
   });
 });
 
@@ -192,32 +298,58 @@ describe('api', () => {
   });
 });
 
+/** Appends an offender label for every statement in `statements` that has an unjustified bare `"*"` Resource. */
+function collectWildcardOffenders(
+  logicalId: string,
+  label: string,
+  statements: Statement[],
+  offenders: string[],
+): void {
+  for (const statement of statements) {
+    const resourceField = Array.isArray(statement.Resource)
+      ? statement.Resource
+      : [statement.Resource];
+    const hasBareWildcard = resourceField.some((r) => r === '*');
+    if (hasBareWildcard && !isAllowedWildcardStatement(statement)) {
+      offenders.push(`${logicalId}${label}/${statement.Sid ?? '(no sid)'}`);
+    }
+  }
+}
+
 describe('IAM least privilege', () => {
   it('never grants a bare Resource "*" outside the documented AgentCore exceptions', () => {
-    const policies = template.findResources('AWS::IAM::Policy');
     const offenders: string[] = [];
 
-    for (const [logicalId, policy] of Object.entries(policies)) {
-      const statements = (
-        policy as {
-          Properties: {
-            PolicyDocument: {
-              Statement: Array<{ Sid?: string; Action?: unknown; Resource?: unknown }>;
-            };
-          };
-        }
-      ).Properties.PolicyDocument.Statement;
-
-      for (const statement of statements) {
-        const resources = Array.isArray(statement.Resource)
-          ? statement.Resource
-          : [statement.Resource];
-        const hasBareWildcard = resources.some((resource) => resource === '*');
-        if (hasBareWildcard && !isAllowedWildcardStatement(statement)) {
-          offenders.push(`${logicalId}/${statement.Sid ?? '(no sid)'}`);
+    const scan = (
+      resourceType: string,
+      extractStatementSets: (properties: Record<string, unknown>) => Array<[string, Statement[]]>,
+    ): void => {
+      const resources = template.findResources(resourceType);
+      for (const [logicalId, resource] of Object.entries(resources)) {
+        const properties = (resource as { Properties: Record<string, unknown> }).Properties;
+        for (const [label, statements] of extractStatementSets(properties)) {
+          collectWildcardOffenders(logicalId, label, statements, offenders);
         }
       }
-    }
+    };
+
+    // Standalone inline policies attached via `Roles`/`Users`/`Groups`.
+    scan('AWS::IAM::Policy', (properties) => [
+      ['', (properties.PolicyDocument as { Statement: Statement[] }).Statement],
+    ]);
+    // Inline policies embedded directly on a Role (review round 1, item 8): the `Policies`
+    // property, one policy document per entry.
+    scan('AWS::IAM::Role', (properties) => {
+      const inlinePolicies = (properties.Policies ?? []) as Array<{
+        PolicyName: string;
+        PolicyDocument: { Statement: Statement[] };
+      }>;
+      return inlinePolicies.map((p) => [`/Policies/${p.PolicyName}`, p.PolicyDocument.Statement]);
+    });
+    // Standalone managed policies (review round 1, item 8).
+    scan('AWS::IAM::ManagedPolicy', (properties) => [
+      ['', (properties.PolicyDocument as { Statement: Statement[] }).Statement],
+    ]);
 
     expect(offenders).toEqual([]);
   });

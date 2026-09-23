@@ -21,25 +21,25 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked (needs Na
 - [x] T1.3 Shared code: `aws/lambdas/src/lib/` (TS: job store, S3, SSE) — todo; `aws/common/docintel_common` (Python: auth, secrets, sse, config for agents) — done and Ruff-clean
 
 ## P2 AWS core infra (CDK)
-- [~] (implemented by Sonnet, in Fable review) T2.1 CDK app skeleton (`aws/infra`), context: region, modelId
-- [~] (implemented by Sonnet, in Fable review) T2.2 S3 uploads bucket (CORS, lifecycle, notifications) + web bucket + CloudFront (OAC)
-- [~] (implemented by Sonnet, in Fable review) T2.3 DynamoDB `docintel-jobs` + GSI + TTL
-- [~] (implemented by Sonnet, in Fable review) T2.4 Cognito user pool, domain, resource server, M2M client (secret)
-- [~] (implemented by Sonnet, in Fable review) T2.5 Secrets Manager placeholders (`docintel/databricks`)
+- [x] T2.1 CDK app skeleton (`aws/infra`), context: region, modelId
+- [x] T2.2 S3 uploads bucket (CORS, lifecycle, notifications) + web bucket + CloudFront (OAC)
+- [x] T2.3 DynamoDB `docintel-jobs` + GSI + TTL
+- [x] T2.4 Cognito user pool, domain, resource server, M2M client (secret)
+- [x] T2.5 Secrets Manager placeholders (`docintel/databricks`)
 - [x] T2.6 Lambda `api` (TypeScript, Function URL streaming): uploads, jobs, process, chat, health
 - [x] T2.7 Lambda `s3-trigger` (TypeScript) — the earlier Python draft was retired on 2026-09-23
-- [~] (implemented, in review) T2.8 `BucketDeployment` for SPA + runtime `config.json`
+- [x] T2.8 `BucketDeployment` for SPA + runtime `config.json`
 
 ## P3 AWS MCP server
 - [x] T3.1 (Sonnet built, Fable reviewed 1 round — 11 findings fixed, 174 tests) `mcp-tools` Lambda (TypeScript, 7 tools, `mammoth` for DOCX) — Python draft retired; `aws/lambdas/tools.json` schema done
-- [~] (implemented, in review) T3.2 Gateway (Cognito JWT) + Lambda target in CDK
-- [ ] T3.3 `scripts/mcp-smoke.py` (token → list_tools → call `get_job`)
+- [x] T3.2 Gateway (Cognito JWT) + Lambda target in CDK
+- [x] T3.3 `scripts/mcp-smoke.py` (token → list_tools → call `get_job`)
 
 ## P4 AWS agents (AgentCore Runtime)
 - [x] T4.1 DOCX agent (Strands + AgentCore SDK): extract via MCP, structured enrichment, save result
 - [x] T4.2 Orchestrator agent: modes sync/async/chat, routing, Databricks MCP client, delegate tool, SSE event mapping, async-task pattern
 - [x] T4.3 `aws/agents/build.sh` – arm64 zip packaging with uv — Sonnet built, Fable reviewed 1 round (10 findings fixed), 85 tests, zips 29 MB
-- [~] (implemented, in review) T4.4 Runtimes + IAM in CDK (`AgentRuntimeArtifact.fromS3`/`fromCodeAsset`)
+- [x] T4.4 Runtimes + IAM in CDK (`AgentRuntimeArtifact.fromS3`/`fromCodeAsset`)
 - [x] T4.5 `scripts/pick-model.sh` — probes tool-calling on candidate models, prints the first usable BEDROCK_MODEL_ID
 
 ## P5 Databricks
@@ -51,20 +51,23 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked (needs Na
 - [x] T5.6 `scripts/deploy-databricks.sh` (secret scope, SP, grants, bundle deploy, app start) — Sonnet built, Fable reviewed 2 rounds (11 findings fixed), 35 tests; deploy script + grants unverified until a workspace exists
 
 ## P6 Cross-cloud link
-- [ ] T6.1 `scripts/link.sh` – exchange secrets both ways from CDK outputs + Databricks
-- [ ] T6.2 Smoke tests both directions
+- [x] T6.1 `scripts/link.sh` – exchange secrets both ways from CDK outputs + Databricks
+- [x] T6.2 (written + unit-tested; live run pending a deployed stack) Smoke tests both directions
 
 ## P7 Frontend
 - [x] T7.1 Vite React TS Tailwind scaffold, runtime config loader
 - [x] T7.2 Upload panel (dropzone, mode toggle), jobs list with polling
 - [x] T7.3 Job detail: status stepper, agent trace (AWS vs Databricks badges), results card
 - [x] T7.4 Streaming: sync-process stream + chat panel (SSE parser) — Sonnet built, Fable reviewed 2 rounds (15 findings fixed), 78 tests, 96% cov
-- [~] (implemented, in review) T7.5 Build + deploy via CDK
+- [x] T7.5 Build + deploy via CDK
 
 ## P8 E2E + demo
-- [ ] T8.1 `scripts/e2e.sh` (4 runs)
-- [ ] T8.2 `docs/DEMO.md` runbook
-- [ ] T8.3 Root README final pass
+- [x] T8.1 `scripts/e2e.sh` (4 runs)
+- [x] T8.2 `docs/DEMO.md` runbook
+- [x] T8.3 Root README final pass
+
+## Status 2026-09-24
+All 41 build tasks complete. 426 tests green across six workspaces (lambdas 174, agents 85, frontend 77, databricks 35, infra 29, scripts 26); ESLint/Prettier/tsc/Ruff/ty clean; `cdk synth` produces 54 resources. 66 review findings were fixed across 9 review rounds before anything was ticked. Nothing is deployed — the remaining work is live deployment + the E2E run, which needs the items below.
 
 ## Blocked on Naren
 - [!] B1 `aws login`

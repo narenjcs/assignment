@@ -4,6 +4,7 @@ import { Stack, type StackProps } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import { resolveAssetPaths, type AssetPaths } from './asset-paths.js';
 import { writeOutputs } from './outputs.js';
+import { JOB_TTL_DAYS_STRING } from './constants.js';
 import { createNaming, type Naming } from './constructs/naming.js';
 import { Storage } from './constructs/storage.js';
 import { JobsTable } from './constructs/jobs-table.js';
@@ -112,7 +113,7 @@ export class DocIntelStack extends Stack {
       databricksSecret: auth.databricksSecret,
       docxAgentZipPath: ctx.paths.docxAgentZipPath,
       orchestratorZipPath: ctx.paths.orchestratorZipPath,
-      jobTtlDays: '7',
+      jobTtlDays: JOB_TTL_DAYS_STRING,
     });
   }
 

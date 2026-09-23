@@ -5,6 +5,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { RemovalPolicy, SecretValue } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import type { Naming } from './naming.js';
+import { forceDeleteOnDestroy } from './force-delete-secret.js';
 
 export interface GatewayAuthInputs {
   readonly tokenUrl: string;
@@ -43,6 +44,7 @@ export class Gateway extends Construct {
     this.gatewayUrl = this.gateway.gatewayUrl ?? '';
     this.addJobsTarget(props);
     this.awsMcpSecret = this.buildAwsMcpSecret(props);
+    forceDeleteOnDestroy(this, 'AwsMcpSecretForceDelete', this.awsMcpSecret);
   }
 
   private buildGateway(props: GatewayProps): agentcore.Gateway {
@@ -65,6 +67,15 @@ export class Gateway extends Construct {
   }
 
   private buildAwsMcpSecret(props: GatewayProps): secretsmanager.Secret {
+    // Follow-up (T2.4, review round 1 item 9): `clientSecret` here is `Auth.clientSecret`, itself
+    // sourced from CDK's own `userPoolClientSecret` custom resource — already verified safe
+    // as-is (see the comment in auth.ts next to that getter: no plaintext in the template or
+    // CloudWatch). The architecturally tighter alternative — have `docintel_common.mcp_backend`
+    // fetch the client secret at runtime via `cognito-idp:DescribeUserPoolClient` instead of
+    // reading it from this secret's `clientSecret` field — would remove the value from Secrets
+    // Manager storage entirely, but requires changing the documented `AWS_MCP_SECRET_ARN` secret
+    // shape and its one consumer (`aws/agents/orchestrator/tools.py` `gateway_client()`), both
+    // outside `aws/infra`'s scope. Left as-is; flagged in the review-round-1 report.
     return new secretsmanager.Secret(this, 'AwsMcpSecret', {
       secretName: props.naming.awsMcpSecret,
       removalPolicy: RemovalPolicy.DESTROY,

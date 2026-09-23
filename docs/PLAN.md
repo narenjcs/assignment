@@ -227,7 +227,7 @@ All tools return `{ok: true, data} | {ok: false, error: {code, message}}`. Pinne
 
 ## 5. Cross-cloud wiring (`make link`)
 1. Read CDK outputs → write Databricks secrets: `aws_gateway_url`, `aws_mcp_client_id`, `aws_mcp_client_secret`, `aws_mcp_token_url`, `aws_mcp_scope`.
-2. Read Databricks SP creds + app URL → write AWS secret `docintel/databricks` = `{host, client_id, client_secret, mcp_url, job_id}`.
+2. Read Databricks SP creds + app URL → write AWS secret `docintel/databricks` = `{host, clientId, clientSecret, mcpUrl, jobId}` (**camelCase** — this JSON is consumed by `docintel_common/mcp_backend.py` and seeded by the CDK; only the Databricks *secret-scope keys* in step 1 are snake_case).
 3. Smoke test both directions with `scripts/mcp-smoke.py` (lists tools on each server using the other cloud's credentials).
 
 ## 6. Testing & demo

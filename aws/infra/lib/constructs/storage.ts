@@ -4,12 +4,12 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import type { Naming } from './naming.js';
+import { JOB_TTL_DAYS } from '../constants.js';
 
 export interface StorageProps {
   readonly naming: Naming;
 }
 
-const UPLOAD_LIFECYCLE_DAYS = 7;
 const SPA_ERROR_CODES = [403, 404];
 
 /**
@@ -42,7 +42,9 @@ export class Storage extends Construct {
           allowedHeaders: ['*'],
         },
       ],
-      lifecycleRules: [{ expiration: Duration.days(UPLOAD_LIFECYCLE_DAYS) }],
+      // Matches JOB_TTL_DAYS (lib/constants.ts) so the uploaded source object and its DynamoDB
+      // job record expire together (review round 1, item 7 — single source for the 7-day value).
+      lifecycleRules: [{ expiration: Duration.days(JOB_TTL_DAYS) }],
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });

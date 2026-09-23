@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { App } from 'aws-cdk-lib';
 import { DocIntelStack } from '../lib/docintel-stack.js';
+import { resolveStackId } from '../lib/stack-id.js';
 
 const REGION = 'us-east-1';
 
@@ -14,7 +15,13 @@ if (!modelId) {
 }
 const stage = (app.node.tryGetContext('stage') as string | undefined) ?? 'dev';
 
-new DocIntelStack(app, 'DocIntelStack', {
+// The stack id itself must carry the stage (review round 1, item 2): otherwise `-c stage=prod`
+// would resolve to the exact same CloudFormation stack as the default "dev" deploy, and CDK
+// would happily replace/destroy dev's jobs table, buckets, etc. to reconcile it with a prod
+// synth instead of creating a separate stack.
+const stackId = resolveStackId(stage);
+
+new DocIntelStack(app, stackId, {
   modelId,
   stage,
   // Account comes from the CLI's resolved credentials (the `cdk` CLI sets CDK_DEFAULT_ACCOUNT

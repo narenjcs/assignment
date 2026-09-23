@@ -112,6 +112,32 @@ def read_secret(arn: str, region: str) -> str:
     return str(client.get_secret_value(SecretId=arn)["SecretString"])
 
 
+def parse_aws_mcp_secret(raw: str) -> str:
+    """Pull `clientSecret` out of the `docintel/aws-mcp` secret JSON
+    (`{tokenUrl, clientId, clientSecret, scope, gatewayUrl}`, all camelCase). Falls back to
+    treating `raw` itself as the secret value for a plain-text (non-JSON) secret.
+    """
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    return str(parsed["clientSecret"]) if isinstance(parsed, dict) else raw
+
+
+def parse_databricks_secret(raw: str) -> tuple[str, str, str, str]:
+    """Parse the `docintel/databricks` secret JSON
+    (`{host, clientId, clientSecret, mcpUrl, jobId}`, all camelCase) into
+    `(host, client_id, client_secret, mcp_url)`.
+    """
+    secret_json = json.loads(raw)
+    return (
+        str(secret_json["host"]),
+        str(secret_json["clientId"]),
+        str(secret_json["clientSecret"]),
+        str(secret_json["mcpUrl"]),
+    )
+
+
 def m2m_token(token_url: str, client_id: str, client_secret: str, scope: str) -> str:
     basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     resp = httpx.post(
@@ -150,22 +176,17 @@ async def run_cloud_checks(cfg: dict[str, str], cloud: str) -> list[CheckResult]
     region = cfg.get("AWS_REGION", "us-east-1")
     try:
         if cloud == "aws":
-            raw_secret = read_secret(require(cfg, "AwsMcpSecretArn"), region)
-            try:
-                parsed = json.loads(raw_secret)
-                secret = str(parsed["clientSecret"]) if isinstance(parsed, dict) else raw_secret
-            except json.JSONDecodeError:
-                secret = raw_secret
+            secret = parse_aws_mcp_secret(read_secret(require(cfg, "AwsMcpSecretArn"), region))
             keys = ("CognitoTokenUrl", "CognitoClientId", "CognitoScope", "GatewayUrl")
             token_url, client_id, scope, url = (require(cfg, k) for k in keys)
             token = m2m_token(token_url, client_id, secret, scope)
             expected, tool, args, label = AWS_TOOL_NAMES, "list_jobs", {"limit": 1}, "cognito_token"
         else:
-            secret_json = json.loads(read_secret(require(cfg, "DatabricksSecretArn"), region))
-            token_url = f"{secret_json['host'].rstrip('/')}/oidc/v1/token"
-            client_id, client_secret = secret_json["client_id"], secret_json["client_secret"]
+            raw_secret = read_secret(require(cfg, "DatabricksSecretArn"), region)
+            host, client_id, client_secret, url = parse_databricks_secret(raw_secret)
+            token_url = f"{host.rstrip('/')}/oidc/v1/token"
             token = m2m_token(token_url, client_id, client_secret, "all-apis")
-            url, label = secret_json["mcp_url"], "databricks_oauth_token"
+            label = "databricks_oauth_token"
             expected, tool, args = DATABRICKS_TOOL_NAMES, "health", {}
     except Exception as exc:
         return [CheckResult(f"{cloud}_token", False, str(exc))]

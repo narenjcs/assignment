@@ -12,7 +12,7 @@ DynamoDB and a Unity Catalog table, and stream back to the browser. Sync and asy
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, milestones, dependencies |
 | [docs/TASKS.md](docs/TASKS.md) | Task board and decisions log |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Binding engineering standards (limits, patterns, API/MCP conventions, gates) |
-| [docs/DEMO.md](docs/DEMO.md) | Demo runbook (written in P8) |
+| [docs/DEMO.md](docs/DEMO.md) | Demo runbook: setup, deploy, the 4 demo runs, chat follow-up, R1–R10 mapping, troubleshooting, teardown |
 
 ## Quick start
 
@@ -40,7 +40,7 @@ make e2e                        # 4 scenarios: docx/pdf × sync/async
 aws/infra      CDK (TypeScript)        aws/lambdas   api · s3-trigger · mcp-tools (TypeScript)
 aws/agents     orchestrator · docx_agent (Python, Strands, AgentCore Runtime)
 aws/common     shared Python helpers   databricks/   bundle · app (MCP server + PDF agent) · job · sql
-frontend       Vite + React 19         scripts/      prereqs · pick-model · deploy · link · e2e
+frontend       Vite + React 19         scripts/      prereqs · pick-model · deploy-databricks · link · e2e · mcp-smoke
 ```
 
 Region `us-east-1`, model `openai.gpt-oss-120b-1:0` (configurable via `BEDROCK_MODEL_ID` / CDK context).

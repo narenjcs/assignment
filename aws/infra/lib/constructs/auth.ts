@@ -3,6 +3,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { RemovalPolicy, SecretValue, Stack } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import type { Naming } from './naming.js';
+import { forceDeleteOnDestroy } from './force-delete-secret.js';
 
 export interface AuthProps {
   readonly naming: Naming;
@@ -36,8 +37,16 @@ export class Auth extends Construct {
     this.tokenUrl = credentials.tokenUrl;
     this.scope = credentials.scope;
     this.clientId = this.userPoolClient.userPoolClientId;
+    // Review round 1, item 9: this getter's own `AwsCustomResource` (CDK's `UserPoolClient`
+    // L2, `DescribeCognitoUserPoolClient`) already keeps the plaintext client secret out of both
+    // the synthesized template's `SecretString` (an `Fn::Join`/`Fn::GetAtt` reference, never a
+    // literal — verified against `cdk.out/DocIntelStack.template.json`) and CloudWatch (its call
+    // is wrapped in `Logging.withDataHidden()` whenever the `@aws-cdk/cognito:
+    // logUserPoolClientSecretValue` feature flag is unset/false, which it is here — `cdk.json`
+    // does not enable it). Do not enable that flag without re-auditing this path.
     this.clientSecret = this.userPoolClient.userPoolClientSecret;
     this.databricksSecret = this.buildDatabricksSecret(props);
+    forceDeleteOnDestroy(this, 'DatabricksSecretForceDelete', this.databricksSecret);
   }
 
   private buildUserPool(props: AuthProps): cognito.UserPool {
