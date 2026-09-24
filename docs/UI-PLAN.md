@@ -85,8 +85,12 @@ Keep Tailwind 4; no component library.
 
 - **Type**: one display face for headings, tabular numerals for metrics.
 - **Depth**: soft shadows and 1px hairline borders instead of heavy boxes; 8px rhythm.
-- **Colour**: AWS amber and Databricks red used *only* for provenance (badges, diagram bands,
-  trace rail), so colour always means "which cloud". Neutral greys elsewhere.
+- **Colour**: **no yellow anywhere.** The AWS token was `#ff9900`, which reads as yellow and
+  fails contrast for text on white; it becomes a deeper orange (a separate bright accent may be
+  kept for large fills only, never text). Orange and red are reserved *exclusively* for cloud
+  provenance (badges, diagram bands, trace rail). **State uses a different hue family** — sky for
+  queued, indigo/violet for in-flight, emerald for done, red reserved for failure — so a reader
+  can never confuse "which cloud" with "what state". Neutral greys elsewhere.
 - **Dark mode**: `prefers-color-scheme`, semantic tokens in `globals.css`.
 - **Trace list** (kept, restyled — not replaced by the diagram): vertical timeline with a
   cloud-coloured rail, monospace tool names, relative timestamps, and a row per event exactly as
@@ -96,6 +100,11 @@ Keep Tailwind 4; no component library.
   by type, then a compact metadata grid (pages, words, method, model, UC table).
 - **Empty/loading**: skeletons rather than spinners; the diagram renders greyed-out before upload
   so the architecture is visible even with no job.
+- **Scrolling**: each panel owns its scroll region — jobs list, job detail (trace + result) and
+  chat scroll independently inside a viewport-height shell, so a long trace never grows the page.
+  Requires `min-h-0` on flex children (the usual flexbox overflow trap) and
+  `scrollbar-gutter: stable` to avoid layout shift. The flow diagram stays pinned while the trace
+  scrolls beneath it. On mobile the columns stack, each still scrollable.
 - **A11y**: state never colour-only (icon + label), focus rings, live region announcing status
   changes, keyboard-operable diagram nodes.
 
