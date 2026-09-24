@@ -87,7 +87,7 @@ All 41 build tasks complete. 426 tests green across six workspaces (lambdas 174,
 
 ## P10 UI polish (see docs/UI-PLAN.md)
 - [~] U1 `lib/flow-model.ts` — pure `events[] → node state` mapping + tests (DOCX skips the Databricks band, PDF sync, PDF async, FAILED, idle, gateway-tool callback edge)
-- [ ] U2 **DEFERRED** (Naren, 2026-09-24) `components/FlowDiagram.tsx` — hand-written inline SVG, two cloud bands, node states (pending/active/done/failed/skipped), the Databricks→AWS callback edge, tooltips, `prefers-reduced-motion`, keyboard + screen-reader support, idle render before any upload
+- [~] U2 `components/FlowDiagram.tsx` — dark console-style architecture view in a dialog behind a **View flow** button (not inline in Job detail); glowing per-cloud node cards with status pills, greyed Databricks column on a DOCX job, dashed labelled BACKWARD FLOW edge — hand-written inline SVG, two cloud bands, node states (pending/active/done/failed/skipped), the Databricks→AWS callback edge, tooltips, `prefers-reduced-motion`, keyboard + screen-reader support, idle render before any upload
 - [~] U3 Mode cards + persistent info note: sync vs async is *how you watch*; document type decides the cloud
 - [~] U4 Design tokens, dark mode, typography in `globals.css`; cloud colour reserved for provenance
 - [~] U5 **Agent trace — now the primary visual in Job detail** (diagram deferred): timeline with cloud-coloured rail, monospace tool names, relative times; two-way highlight with the diagram

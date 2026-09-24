@@ -8,65 +8,67 @@ Three deliverables, in priority order.
 
 ---
 
-## 1. Live agent-flow diagram — **DEFERRED** (2026-09-24)
+## 1. Agent-flow view — opened from a "View flow" button
 
-> Deferred to a later round on Naren's call. `lib/flow-model.ts` (the pure events→node-state
-> mapping) is built and tested and stays in the tree as the foundation; nothing renders it yet.
-> Until then **the Agent trace is the primary visual in Job detail** — see §2.1 below. The rest of
-> this section is the spec for when we pick it up.
+**Not inline in Job detail.** Job detail stays compact (status stepper → result card → agent
+trace) with a single **View flow** button. Clicking it opens a full-width overlay containing the
+architecture view below. That keeps the detail pane readable and makes the diagram an event —
+which is what you want in a demo.
 
-### Original spec
+### Target look (from Naren's mockup)
 
-An inline SVG of the pipeline that **animates as the job runs**, driven by the job's existing
-`events[]` trace and, in sync mode, by the live SSE stream. No new backend work: every event
-already carries `source` (`aws` | `databricks` | `orchestrator`), `agent`, `tool`, `message`
-and `ts`.
-
-**Layout** (single row of stages, left to right, grouped into two cloud bands):
+A dark "console" canvas, deliberately unlike the rest of the app:
 
 ```
-  ┌── AWS ─────────────────────────────────────────────┐   ┌── Databricks ──────────────┐
-  Browser → S3 → Trigger → Orchestrator ─┬─ DOCX Agent  │   │                            │
-                                          └──────────────┼──→ PDF Agent → Volume → Table │
-                            ▲                            │        │                      │
-                            └──────── MCP Gateway ◄──────┼────────┘  (callback)          │
-  └────────────────────────────────────────────────────┘   └────────────────────────────┘
+SYSTEM ARCHITECTURE FLOW
+
+AWS ─────────────────────────────────      │   DATABRICKS ──────────────────
+                                           │
+ ┌────────┐  ┌────────┐  ┌────────┐        │
+ │BROWSER │→ │   S3   │→ │TRIGGER │→ ┌──────────┐      ┌────────┐
+ │Completed│  │ Active │  │ Active │   │ORCHESTR. │  →   │ VOLUME │
+ └────────┘  └────────┘  └────────┘   │  Active  │ │    │ Active │
+                              ↘        └──────────┘ │    └────────┘
+                           ┌──────────┐      ↓      │  ┌──────────┐
+                           │DOCX AGENT│ →  ┌─────────┐ │  TABLE   │
+                           │  Active  │    │PDF AGENT│ │  Active  │
+                           └──────────┘    │ Active  │ └──────────┘
+        ┌────────────┐                     └─────────┘
+        │MCP GATEWAY │ ◀┄┄┄┄┄ BACKWARD FLOW ┄┄┄┄┄┘
+        │  Skipped   │
+        └────────────┘
 ```
 
-**Node states** — derived, never stored:
-| State | Visual |
-|---|---|
-| pending | outline only, muted |
-| active | filled, soft pulse, animated edge into it |
-| done | filled, check, cloud-tinted |
-| failed | red ring + cross |
-| skipped | dashed outline, 40% opacity (e.g. the Databricks band on a DOCX job) |
+Specifics that make it look like the mockup:
+- **Dark canvas** (`#0a0a0b`) with a faint 1px grid, regardless of the app's light/dark setting —
+  this panel is always dark.
+- **Two labelled columns**, `AWS` and `DATABRICKS`, each with a coloured underline in its cloud
+  colour, separated by a vertical divider.
+- **Node = rounded square card**: line icon on top, UPPERCASE label, then a small **status pill**
+  (`Active` / `Completed` / `Skipped` / `Failed`).
+- **Glow, not fill**: an active node has a coloured border plus an outer glow in its cloud colour
+  (amber on the AWS side, red on the Databricks side). Completed is a calm neutral card with a
+  check. **Skipped is grey, dashed, ~45% opacity** — so a DOCX job visibly greys the whole
+  Databricks column, which teaches the routing rule in one glance.
+- **Arrows** are thin white/neutral connectors with small heads.
+- **The backward flow is the point**: a **dashed** line from PDF Agent back to MCP Gateway,
+  labelled `BACKWARD FLOW`. That edge is the visual proof of the brief — an agent in Databricks
+  calling an MCP server in AWS — so it gets its own label and animates when it fires.
 
-**Mapping events → nodes** (pure function, unit-tested):
-- `api/create_job` → Browser, S3
-- `s3-trigger/s3:ObjectCreated` → Trigger
-- `orchestrator/*` → Orchestrator
-- `source=databricks` + `tool` ∈ {ingest, extract, enrich, persist} → PDF Agent sub-steps
-- any `tool` ∈ the 7 gateway tools → pulse the MCP Gateway edge (this is the cross-cloud proof)
-- `docx-agent/*` → DOCX Agent
-- terminal status → all remaining nodes resolve
+### Behaviour
 
-**Interaction**: hover a node → tooltip with the actual events that hit it (tool name + relative
-time); click → scroll the trace list to that event. Respect `prefers-reduced-motion` (no pulse,
-state changes only).
+- Driven by `lib/flow-model.ts` (already built and tested): job `events[]`, plus live SSE events
+  in sync mode.
+- Opens as a dialog: focus trapped, `Esc` closes, `role="dialog"` + `aria-label`, returns focus
+  to the button. Body scroll locked while open.
+- Nodes are focusable; hover/focus shows the real events that hit that node (tool + relative
+  time).
+- Active node and its incoming edge animate; everything respects `prefers-reduced-motion`.
+- Opens fine with no job selected: every node `pending`, which doubles as an architecture
+  overview.
+- Scrolls horizontally on narrow screens rather than squashing.
 
-**The existing Agent trace list stays.** The diagram and the trace are complements, not
-alternatives: the diagram answers *where are we and which cloud is working*, the trace answers
-*exactly what happened, in order, with timestamps and tool names*. The trace remains the
-authoritative record (it is what `GET /jobs/{id}` returns) and is the thing to point at when
-someone asks "prove Databricks called back into AWS". They are wired together — clicking a
-diagram node scrolls and highlights the matching trace rows, and hovering a trace row highlights
-its node — so the picture and the evidence stay in sync.
-
-**Why SVG in React, not a static image**: it must reflect *this* job. One `<FlowDiagram job=…>`
-component, ~200 lines, no new dependency.
-
----
+Hand-written inline SVG (plus a little CSS for the glow). **No new runtime dependency.**
 
 ## 2. Sync vs async, explained where the choice is made
 
@@ -99,8 +101,8 @@ Keep Tailwind 4; no component library.
   queued, indigo/violet for in-flight, emerald for done, red reserved for failure — so a reader
   can never confuse "which cloud" with "what state". Neutral greys elsewhere.
 - **Dark mode**: `prefers-color-scheme`, semantic tokens in `globals.css`.
-- **Trace list** — now the primary visual in Job detail (the diagram is deferred), so it has to
-  carry the story on its own: vertical timeline with a cloud-coloured rail so the AWS→Databricks
+- **Trace list** — the primary visual *inside* Job detail (the diagram lives behind the View
+  flow button), so it still has to read well on its own: vertical timeline with a cloud-coloured rail so the AWS→Databricks
   →AWS hand-offs are obvious at a glance, monospace tool names, relative timestamps, and a row
   per event exactly as the API returns it. Grouped by cloud, collapsed once COMPLETED but
   expandable. Job detail is: status stepper → result card → agent trace.

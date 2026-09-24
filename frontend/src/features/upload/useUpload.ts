@@ -13,8 +13,6 @@ export interface UseUploadOptions {
   onJobCreated?: ((jobId: string) => void) | undefined;
   /** Fired when a sync stream closes without `done`, after the client re-fetches the job. */
   onResync?: ((job: Job) => void) | undefined;
-  /** Fired for every SSE frame, so a parent can feed FlowDiagram a live event list. */
-  onStreamEvent?: ((event: SseEvent) => void) | undefined;
 }
 
 export interface UseUploadResult {
@@ -103,13 +101,9 @@ export function useUpload(options: UseUploadOptions = {}): UseUploadResult {
   const [error, setError] = useState<string | null>(null);
   const [streamEvents, setStreamEvents] = useState<SseEvent[]>([]);
 
-  const onStreamEvent = useCallback(
-    (event: SseEvent) => {
-      setStreamEvents((prev) => [...prev, event]);
-      options.onStreamEvent?.(event);
-    },
-    [options],
-  );
+  const onStreamEvent = useCallback((event: SseEvent) => {
+    setStreamEvents((prev) => [...prev, event]);
+  }, []);
 
   const submit = useCallback(async () => {
     if (!file) return;

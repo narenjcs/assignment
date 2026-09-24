@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
 import { Badge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
@@ -7,9 +7,6 @@ import type { JobEvent } from '../../types/job';
 
 export interface JobTraceProps {
   events: JobEvent[];
-  /** Event indices to highlight — set when a matching FlowDiagram node is clicked. */
-  highlightedIndices?: number[];
-  onHoverEvent?: (index: number | null) => void;
 }
 
 const RAIL_CLASSES: Record<JobEvent['source'], string> = {
@@ -18,22 +15,17 @@ const RAIL_CLASSES: Record<JobEvent['source'], string> = {
   orchestrator: 'border-l-brand-orchestrator/50',
 };
 
-/** Append-only agent trace timeline for a job (PLAN §2.4 JobEvent[]). Rows highlight when the
- * matching FlowDiagram node is clicked, and scroll into view the first time that happens; the
- * left rail is coloured by cloud provenance, matching the diagram bands. */
-export function JobTrace({
-  events,
-  highlightedIndices = [],
-  onHoverEvent,
-}: JobTraceProps): ReactElement {
-  const rowRefs = useRef<Map<number, HTMLLIElement>>(new Map());
+/** True for the first event, or the first event of a run from a different source — used to add
+ * a little extra breathing room between provenance groups so the trace reads at a glance. */
+function startsNewGroup(events: JobEvent[], index: number): boolean {
+  return index === 0 || events[index - 1]?.source !== events[index]?.source;
+}
 
-  useEffect(() => {
-    const target = highlightedIndices[0];
-    if (target === undefined) return;
-    rowRefs.current.get(target)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [highlightedIndices]);
-
+/** Append-only agent trace timeline for a job (PLAN §2.4 `JobEvent[]`) — the primary visual in
+ * Job detail now that the flow diagram is deferred. Left rail colour signals cloud provenance
+ * (AWS / Databricks / orchestrator), tool names render in monospace, timestamps are relative,
+ * and consecutive same-source events are grouped with extra spacing above each source change. */
+export function JobTrace({ events }: JobTraceProps): ReactElement {
   if (events.length === 0) {
     return (
       <EmptyState
@@ -43,21 +35,13 @@ export function JobTrace({
     );
   }
 
-  const highlighted = new Set(highlightedIndices);
-
   return (
     <ol className="space-y-1.5">
       {events.map((event, index) => (
         <li
           key={`${event.ts}-${index}`}
-          ref={(el) => {
-            if (el) rowRefs.current.set(index, el);
-            else rowRefs.current.delete(index);
-          }}
-          onMouseEnter={() => onHoverEvent?.(index)}
-          onMouseLeave={() => onHoverEvent?.(null)}
-          className={`flex items-start gap-2 rounded-r-md border-l-2 py-1 pl-2 text-xs ${RAIL_CLASSES[event.source]} ${
-            highlighted.has(index) ? 'bg-accent/10 ring-1 ring-accent/40' : ''
+          className={`flex items-start gap-2 rounded-r-md border-l-2 py-1.5 pl-3 text-xs ${RAIL_CLASSES[event.source]} ${
+            startsNewGroup(events, index) ? 'mt-2.5' : ''
           }`}
         >
           <Badge variant={event.source}>{event.agent}</Badge>
@@ -68,7 +52,7 @@ export function JobTrace({
               )}
               {event.message}
             </p>
-            <p className="text-[10px] text-slate-400">{formatRelativeTime(event.ts)}</p>
+            <p className="text-[10px] tabular-nums text-slate-400">{formatRelativeTime(event.ts)}</p>
           </div>
         </li>
       ))}

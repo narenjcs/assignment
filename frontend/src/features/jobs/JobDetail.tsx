@@ -1,82 +1,71 @@
-import { useMemo, useState, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
+import { Badge } from '../../components/Badge';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
-import { FlowDiagram } from '../../components/FlowDiagram';
-import { computeFlowModel, type FlowNodeId } from '../../lib/flow-model';
+import { Stepper } from '../../components/Stepper';
 import type { Job } from '../../types/job';
-import type { SseEvent } from '../../types/sse';
-import { JobDetailBody } from './JobDetailBody';
-import { JobStatusHeader } from './JobStatusHeader';
+import { JobResultCard } from './JobResultCard';
+import { JobTrace } from './JobTrace';
 
 export interface JobDetailProps {
   job: Job | null;
-  liveEvents?: SseEvent[];
 }
 
-function eventIndicesForNode(
-  eventNodeMap: Partial<Record<number, FlowNodeId>>,
-  nodeId: FlowNodeId,
-): number[] {
-  return Object.entries(eventNodeMap)
-    .filter(([, id]) => id === nodeId)
-    .map(([index]) => Number(index));
-}
-
-/** Detail panel for the selected job: diagram, status, progress, agent trace, results. The
- * diagram + status block stay pinned while the trace/results section scrolls under them. */
-export function JobDetail({ job, liveEvents = [] }: JobDetailProps): ReactElement {
-  const model = useMemo(() => computeFlowModel(job, liveEvents), [job, liveEvents]);
-  const [focusedIndices, setFocusedIndices] = useState<number[]>([]);
-  const [highlightedNodeId, setHighlightedNodeId] = useState<FlowNodeId | null>(null);
-  const [traceOpen, setTraceOpen] = useState(job?.status !== 'COMPLETED');
-  // Collapse the trace the moment a job finishes, without an effect: this "adjusts state
-  // during render" (react.dev, "You Might Not Need an Effect") by comparing against the
-  // previously-seen status and calling setState synchronously in the render body, which React
-  // restarts immediately — avoiding the extra commit + re-render an effect-based setState causes.
-  const [lastSeenStatus, setLastSeenStatus] = useState(job?.status);
-  if (job?.status !== lastSeenStatus) {
-    setLastSeenStatus(job?.status);
-    if (job?.status === 'COMPLETED') setTraceOpen(false);
-  }
-
-  const handleNodeClick = (nodeId: FlowNodeId): void => {
-    setFocusedIndices(eventIndicesForNode(model.eventNodeMap, nodeId));
-    setTraceOpen(true);
-  };
-  const handleTraceHover = (index: number | null): void => {
-    setHighlightedNodeId(index === null ? null : (model.eventNodeMap[index] ?? null));
-  };
-
+/** Detail panel for the selected job: status stepper, result card, agent trace (in that order —
+ * the diagram is deferred to a later round). The stepper/status block stays pinned while the
+ * result + trace section scrolls under it. */
+export function JobDetail({ job }: JobDetailProps): ReactElement {
   if (!job) {
     return (
       <Card title="Job detail" className="flex h-full min-h-0 flex-col">
-        <FlowDiagram model={model} onNodeClick={handleNodeClick} />
-        <div className="mt-4 min-h-0 flex-1">
-          <EmptyState
-            title="No job selected"
-            description="Pick a job from the list, or upload a new document."
-          />
-        </div>
+        <EmptyState
+          title="No job selected"
+          description="Pick a job from the list, or upload a new document."
+        />
       </Card>
     );
   }
 
   return (
     <Card title={job.fileName} className="flex h-full min-h-0 flex-col">
-      <JobStatusHeader
-        job={job}
-        model={model}
-        highlightedNodeId={highlightedNodeId}
-        onNodeClick={handleNodeClick}
-      />
-      <JobDetailBody
-        job={job}
-        traceOpen={traceOpen}
-        onToggleTrace={() => setTraceOpen((open) => !open)}
-        focusedIndices={focusedIndices}
-        onHoverEvent={handleTraceHover}
-      />
+      <div className="shrink-0">
+        <div aria-live="polite" className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <Badge variant="status" status={job.status}>
+            {job.status}
+          </Badge>
+          <span className="capitalize">{job.mode} mode</span>
+          {job.processor && <span>· {job.processor}</span>}
+        </div>
+
+        <Stepper status={job.status} />
+
+        {job.error !== undefined && (
+          <p role="alert" className="mt-3 text-xs text-state-failed">
+            {job.error}
+          </p>
+        )}
+      </div>
+
+      <div className="scroll-panel mt-4 min-h-0 flex-1 pr-1">
+        <section>
+          <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
+            Result
+          </h3>
+          {job.result ? (
+            <JobResultCard result={job.result} />
+          ) : (
+            <EmptyState title="No results yet" description="Results appear once the job completes." />
+          )}
+        </section>
+
+        <section className="mt-5">
+          <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">
+            Agent trace
+          </h3>
+          <JobTrace events={job.events} />
+        </section>
+      </div>
     </Card>
   );
 }
