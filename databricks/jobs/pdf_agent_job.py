@@ -128,4 +128,11 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    # Deliberately NOT `sys.exit(main(...))`. Serverless `spark_python_task` executes this file
+    # notebook-style, where *any* SystemExit — including `sys.exit(0)` — marks the run FAILED.
+    # That produced runs that had genuinely succeeded (result persisted to Unity Catalog, job
+    # reported COMPLETED to AWS) while the Databricks UI showed "Failed: SystemExit: 0".
+    # Success now simply falls off the end; a real failure raises, so the run fails for a
+    # reason the UI can show.
+    if main(sys.argv) != 0:
+        raise RuntimeError("PDF agent job failed — see the log above for the failing step")

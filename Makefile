@@ -6,6 +6,10 @@ export
 
 AWS_REGION ?= us-east-1
 # Bundle variables every Databricks deploy needs (warehouse_id has no default in databricks.yml).
+# The Databricks CLI's own Terraform download fails on HashiCorp's expired signing key, so
+# every bundle command needs a local binary (see scripts/deploy-databricks.sh).
+DBX_TF = DATABRICKS_TF_EXEC_PATH=$$(command -v terraform) DATABRICKS_TF_VERSION=$$(terraform version -json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["terraform_version"])' 2>/dev/null)
+
 DBX_VARS = --var catalog=$(DATABRICKS_CATALOG) --var schema=$(DATABRICKS_SCHEMA) \
            --var warehouse_id=$(DATABRICKS_WAREHOUSE_ID) --var llm_endpoint=$(DATABRICKS_LLM_ENDPOINT) \
            --var aws_secret_scope=docintel
@@ -49,11 +53,11 @@ deploy-agents: build-agents ## AgentCore runtimes only: rebuild arm64 zips, then
 	@cd aws/infra && npx cdk deploy --require-approval never --outputs-file ../../cdk-outputs.json -c modelId=$(BEDROCK_MODEL_ID)
 
 deploy-dbx-app: ## Databricks App only: sync source and restart it (skips SP/grants setup)
-	@cd databricks && databricks bundle deploy -t dev -p $(DATABRICKS_CONFIG_PROFILE) --auto-approve $(DBX_VARS)
-	@cd databricks && databricks bundle run mcp_docintel -t dev -p $(DATABRICKS_CONFIG_PROFILE) $(DBX_VARS)
+	@cd databricks && $(DBX_TF) databricks bundle deploy -t dev -p $(DATABRICKS_CONFIG_PROFILE) --auto-approve $(DBX_VARS)
+	@cd databricks && $(DBX_TF) databricks bundle run mcp_docintel -t dev -p $(DATABRICKS_CONFIG_PROFILE) $(DBX_VARS)
 
 deploy-dbx-job: ## Databricks bundle resources only (job, schema, volume) - no app restart
-	@cd databricks && databricks bundle deploy -t dev -p $(DATABRICKS_CONFIG_PROFILE) --auto-approve $(DBX_VARS)
+	@cd databricks && $(DBX_TF) databricks bundle deploy -t dev -p $(DATABRICKS_CONFIG_PROFILE) --auto-approve $(DBX_VARS)
 
 link: ## Exchange cross-cloud secrets (AWS<->Databricks) and smoke-test both MCP servers
 	@bash scripts/link.sh

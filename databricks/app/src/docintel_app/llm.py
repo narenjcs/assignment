@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from typing import cast
 
 from databricks.sdk import WorkspaceClient
-from openai import AuthenticationError, OpenAI
+from openai import AuthenticationError, OpenAI, PermissionDeniedError
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import ValidationError
 
@@ -44,15 +44,30 @@ class FmapiClient:
         self._workspace = workspace
         self._client = client
 
+    def _fresh_token(self) -> str:
+        """Current bearer token. The SDK caches and refreshes internally, so this is cheap."""
+        auth = self._workspace.config.authenticate()
+        return auth.get("Authorization", "").removeprefix("Bearer ")
+
     def complete(self, model: str, messages: list[dict[str, str]]) -> str:
-        """One non-streaming chat-completion call, re-authenticating once on a 401."""
+        """One non-streaming chat-completion call using a freshly resolved bearer token.
+
+        The token is resolved per call rather than baked in at construction: the app's OAuth
+        token expires in ~1h, and a long-lived client otherwise keeps presenting a dead one.
+        The retry below is a safety net for a token that expires mid-flight.
+
+        Databricks answers an expired token with **403 `PermissionDeniedError: Invalid Token`**,
+        not 401, so catching only `AuthenticationError` meant the refresh never fired and every
+        enrichment failed once the app had been up for an hour.
+        """
+        self._client = self._client.with_options(api_key=self._fresh_token())
         try:
             return _complete(self._client, model, messages)
-        except AuthenticationError:
-            logger.warning("fmapi call got 401, re-authenticating once and retrying")
-            auth = self._workspace.config.authenticate()
-            token = auth.get("Authorization", "").removeprefix("Bearer ")
-            self._client = self._client.with_options(api_key=token)
+        except (AuthenticationError, PermissionDeniedError) as exc:
+            logger.warning(
+                "fmapi rejected the token (%s), re-authenticating once", type(exc).__name__
+            )
+            self._client = self._client.with_options(api_key=self._fresh_token())
             return _complete(self._client, model, messages)
 
 

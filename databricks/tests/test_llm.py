@@ -4,9 +4,13 @@ retry, and the re-authenticate-once-on-401 behaviour (item 4: the baked-in beare
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import httpx2
 from docintel_app import llm
 from docintel_app.schemas import Enrichment
 from fakes import FakeOpenAI, FakeWorkspaceClient
+from openai import PermissionDeniedError
 
 _VALID_JSON = (
     '{"summary": "s", "key_points": ["a"], "entities": [{"name": "Acme", "type": "ORG"}], '
@@ -51,3 +55,41 @@ def test_fmapi_client_reauthenticates_once_on_401() -> None:
     result = llm.enrich(client, "model-x", "some document text")
 
     assert result.summary == "s"
+
+
+def test_complete_refreshes_on_permission_denied_not_just_401() -> None:
+    """Databricks answers an expired bearer with 403 PermissionDeniedError: Invalid Token.
+
+    Catching only AuthenticationError meant the refresh never fired and every enrichment failed
+    once the app had been up for about an hour (observed live).
+    """
+    calls: list[str] = []
+
+    class _Client:
+        def with_options(self, **kwargs: object) -> _Client:
+            calls.append(str(kwargs.get("api_key")))
+            return self
+
+    workspace = SimpleNamespace(
+        config=SimpleNamespace(authenticate=lambda: {"Authorization": "Bearer fresh-token"})
+    )
+    client = llm.FmapiClient(workspace, _Client())  # type: ignore[arg-type]
+
+    attempts = {"n": 0}
+
+    def fake_complete(_c: object, _m: str, _msgs: object) -> str:
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            response = httpx2.Response(403, request=httpx2.Request("POST", "https://x/y"))
+            raise PermissionDeniedError("Invalid Token", response=response, body=None)
+        return '{"ok": true}'
+
+    original = llm._complete
+    llm._complete = fake_complete  # type: ignore[assignment]
+    try:
+        assert client.complete("m", []) == '{"ok": true}'
+    finally:
+        llm._complete = original  # type: ignore[assignment]
+
+    assert attempts["n"] == 2, "should retry once after the 403"
+    assert calls == ["fresh-token", "fresh-token"], "token resolved per call, then refreshed"
