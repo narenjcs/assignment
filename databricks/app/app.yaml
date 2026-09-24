@@ -13,22 +13,38 @@ command:
   - '--port'
   - '$DATABRICKS_APP_PORT'
 
+# NOTE: DOCINTEL_CATALOG / DOCINTEL_SCHEMA are intentionally NOT set here. app.yaml is uploaded
+# verbatim (no ${var.*} substitution), so hardcoding a catalog here silently pointed the app at a
+# catalog that does not exist on a Default Storage workspace; startup then failed and the app
+# served 502. They are set from bundle variables in ../resources/apps.yml instead.
+# Environment. IMPORTANT: this file — not the bundle — is what the Apps platform reads. A
+# `resources.apps.<app>.env` block in the bundle did NOT reach the deployed app (its config came
+# back with an empty env list), so every var must be declared here. `value_from` names must match
+# resources[].name in ../resources/apps.yml.
+#
+# The key is `valueFrom` (camelCase) — the Apps platform's own app.yaml spelling. The DAB
+# schema uses snake_case `value_from` for its resource block, and using that spelling here is
+# silently ignored: the var is set to an empty string and the app dies on startup validation.
+#
+# DOCINTEL_CATALOG/SCHEMA cannot use ${var.*} here (app.yaml is uploaded verbatim), so they must
+# be kept in step with the bundle variables; scripts/deploy-databricks.sh fails the deploy if
+# they diverge.
 env:
   - name: 'DOCINTEL_CATALOG'
-    value: 'docintel'
+    value: 'workspace'
   - name: 'DOCINTEL_SCHEMA'
     value: 'docs'
   - name: 'DATABRICKS_WAREHOUSE_ID'
-    value_from: 'sql-warehouse'
+    valueFrom: 'sql-warehouse'
   - name: 'DATABRICKS_LLM_ENDPOINT'
-    value_from: 'llm-endpoint'
+    valueFrom: 'llm-endpoint'
   - name: 'AWS_GATEWAY_URL'
-    value_from: 'aws-gateway-url'
+    valueFrom: 'aws-gateway-url'
   - name: 'AWS_MCP_TOKEN_URL'
-    value_from: 'aws-mcp-token-url'
+    valueFrom: 'aws-mcp-token-url'
   - name: 'AWS_MCP_CLIENT_ID'
-    value_from: 'aws-mcp-client-id'
+    valueFrom: 'aws-mcp-client-id'
   - name: 'AWS_MCP_CLIENT_SECRET'
-    value_from: 'aws-mcp-client-secret'
+    valueFrom: 'aws-mcp-client-secret'
   - name: 'AWS_MCP_SCOPE'
-    value_from: 'aws-mcp-scope'
+    valueFrom: 'aws-mcp-scope'

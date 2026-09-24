@@ -41,10 +41,33 @@ source "$ENV_FILE"
 set +a
 
 echo "==> Direction 1/2: AWS -> Databricks secret scope '${SECRET_SCOPE}'"
+# Fill anything the operator has not set from the CDK outputs, so `make deploy-aws && make link`
+# works with no manual copying. The Cognito client secret is never an output (it would end up in
+# the CloudFormation template); read it from the secret the stack created instead.
+if [[ -f "$OUTPUTS_FILE" ]]; then
+  : "${AWS_GATEWAY_URL:=$(out GatewayUrl)}"
+  : "${AWS_MCP_TOKEN_URL:=$(out CognitoTokenUrl)}"
+  : "${AWS_MCP_CLIENT_ID:=$(out CognitoClientId)}"
+  : "${AWS_MCP_SCOPE:=$(out CognitoScope)}"
+  if [[ -z "${AWS_MCP_CLIENT_SECRET:-}" ]]; then
+    AWS_MCP_SECRET_ARN="$(out AwsMcpSecretArn)"
+    if [[ -n "$AWS_MCP_SECRET_ARN" ]]; then
+      AWS_MCP_CLIENT_SECRET="$(aws secretsmanager get-secret-value \
+        --secret-id "$AWS_MCP_SECRET_ARN" --query SecretString --output text 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("clientSecret",""))')"
+    fi
+  fi
+fi
+
 for v in AWS_GATEWAY_URL AWS_MCP_TOKEN_URL AWS_MCP_CLIENT_ID AWS_MCP_CLIENT_SECRET AWS_MCP_SCOPE; do
-  need_env "$v" "produced by \`make deploy-aws\`; copy it from cdk-outputs.json / stack outputs"
+  need_env "$v" "produced by \`make deploy-aws\`; normally read from cdk-outputs.json"
 done
-if db secrets list-scopes -o json | jq -e --arg s "$SECRET_SCOPE" '.scopes[]? | select(.name==$s)' >/dev/null; then
+# `list-scopes -o json` returns a bare JSON array on this CLI, not {"scopes": [...]}, so an
+# `.scopes[]?` lookup errors out and the create below then aborts the run with
+# "Scope docintel already exists!". Accept either shape.
+if db secrets list-scopes -o json \
+  | jq -e --arg s "$SECRET_SCOPE" 'any((if type=="array" then .[] else (.scopes // [])[] end); .name==$s)' \
+    >/dev/null 2>&1; then
   echo "    scope '${SECRET_SCOPE}' already exists"
 else
   echo "    creating scope '${SECRET_SCOPE}'"

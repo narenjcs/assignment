@@ -1,8 +1,10 @@
 # Exact pins (DEVELOPMENT.md G6/G12): must match the interpreter used by `databricks bundle`
 # validation and by the serverless job environment in resources/jobs.yml.
-# `-e .` installs the local `docintel_app` package (pyproject.toml, src/ layout) so
+# `.` installs the local `docintel_app` package (pyproject.toml, src/ layout) so
 # `uvicorn docintel_app.server:build_app` is importable in the deployed App — no PYTHONPATH hack.
--e .
+# Deliberately NOT `-e .`: an editable install needs a writable source tree, which the Apps
+# build sandbox does not guarantee, and it failed there with "Error installing packages".
+.
 mcp==2.1.1
 databricks-sdk==0.140.0
 pydantic==2.12.5

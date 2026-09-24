@@ -6,6 +6,8 @@ resources:
       name: mcp-docintel
       description: DocIntel MCP server + PDF agent (FastAPI on Databricks Apps).
       source_code_path: ../app
+      # Set from bundle variables so the app always matches the catalog/schema this target
+      # actually deployed to (app.yaml cannot use ${var.*}).
       resources:
         - name: aws-gateway-url
           secret:

@@ -182,6 +182,22 @@ echo "==> Granting '${SP_NAME}' CAN_USE on app '${APP_NAME}'"
 db apps update-permissions "${APP_NAME}" \
   --json "{\"access_control_list\": [{\"service_principal_name\": \"${SP_APP_ID}\", \"permission_level\": \"CAN_USE\"}]}"
 
+# The App runs as its OWN service principal (distinct from ${SP_NAME}, which is only the
+# AWS-side caller). Without these grants the app starts, connects to the warehouse, and then dies
+# in startup with "User does not have USE SCHEMA on Schema" — so grant it too.
+APP_SP_ID="$(db apps get "${APP_NAME}" -o json | jval 'd.get("service_principal_client_id", "")')"
+if [[ -n "${APP_SP_ID}" ]]; then
+  echo "==> Granting Unity Catalog privileges to the app's service principal"
+  db grants update catalog "${CATALOG}" \
+    --json "{\"changes\": [{\"principal\": \"${APP_SP_ID}\", \"add\": [\"USE_CATALOG\"]}]}" >/dev/null
+  db grants update schema "${CATALOG}.${SCHEMA}" \
+    --json "{\"changes\": [{\"principal\": \"${APP_SP_ID}\", \"add\": [\"USE_SCHEMA\", \"SELECT\", \"MODIFY\", \"CREATE_TABLE\"]}]}" >/dev/null
+  db grants update volume "${CATALOG}.${SCHEMA}.inbox" \
+    --json "{\"changes\": [{\"principal\": \"${APP_SP_ID}\", \"add\": [\"READ_VOLUME\", \"WRITE_VOLUME\"]}]}" >/dev/null
+else
+  echo "!! could not resolve the app's service principal; grant UC privileges manually" >&2
+fi
+
 JOB_ID="$(db jobs list --name "${JOB_NAME}" -o json | jval 'd[0]["job_id"] if d else ""')"
 if [[ -z "${JOB_ID}" ]]; then
   echo "!! could not find job '${JOB_NAME}' after bundle deploy" >&2
