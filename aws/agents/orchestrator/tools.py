@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator, Callable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from functools import lru_cache
 
 import boto3
@@ -24,6 +24,7 @@ from botocore.config import Config
 from docintel_common import secrets
 from docintel_common.config import Settings, get_settings
 from docintel_common.mcp_backend import (
+    GATEWAY_TOOL_PREFIX,
     McpToolBackend,
     databricks_client,
     gateway_client,
@@ -31,7 +32,7 @@ from docintel_common.mcp_backend import (
 )
 from docintel_common.text import truncate_message
 from events import map_stream_event
-from processors import AwsDocxProcessor, DatabricksPdfProcessor
+from processors import AwsDocxProcessor, DatabricksPdfProcessor, ProcessorError
 from prompts import SYSTEM_PROMPT
 from strands import Agent, tool
 from strands.models import BedrockModel
@@ -86,17 +87,30 @@ def delegate_to_docx_agent(job_id: str, mode: str) -> dict:
     return _delegate(job_id, mode, client, settings.docx_agent_arn)
 
 
-def build_agent(aws_client: MCPClient, dbx_client: MCPClient, settings: Settings) -> Agent:
-    """Build the Strands `Agent` used for synthesis and chat (PLAN §3 model selection)."""
+def build_agent(aws_client: MCPClient, dbx_client: MCPClient | None, settings: Settings) -> Agent:
+    """Build the Strands `Agent` used for synthesis and chat (PLAN §3 model selection).
+
+    Takes already-open `MCPClient`s and passes their *discovered tools* to the `Agent`, not the
+    clients themselves. Handing `Agent` a client it does not own makes Strands try to start the
+    session a second time; verified on a live stack, that fails every invocation with
+    "Failed to start MCP client: the client session is currently running".
+    """
     model = BedrockModel(
         region_name=settings.region,
         model_id=settings.bedrock_model_id,
         max_tokens=1024,
         temperature=0.3,
     )
+    # `dbx_client` is None until Databricks is configured (see `workflow_session`); the LLM then
+    # simply has no Databricks tools, while the deterministic PDF processor still reports a clear
+    # "not configured yet" error if a PDF job is submitted.
+    mcp_tools: list[object] = []
+    for client in (aws_client, dbx_client):
+        if client is not None:
+            mcp_tools.extend(client.list_tools_sync())
     return Agent(
         model=model,
-        tools=[aws_client, dbx_client, delegate_to_docx_agent],
+        tools=[*mcp_tools, delegate_to_docx_agent],
         system_prompt=SYSTEM_PROMPT,
         callback_handler=None,
     )
@@ -119,19 +133,36 @@ def workflow_session(settings: Settings) -> Iterator[WorkflowDeps]:
     `with` block exits, so a single job's tool calls all share one session.
     """
     aws_secret = secrets.get_secret_json(settings.aws_mcp_secret_arn, region=settings.region)
-    dbx_secret = secrets.get_secret_json(settings.databricks_secret_arn, region=settings.region)
-    with (
-        gateway_client(settings.gateway_url, aws_secret) as aws_client,
-        databricks_client(dbx_secret) as dbx_client,
-    ):
-        aws_backend = McpToolBackend(aws_client)
-        dbx_backend = McpToolBackend(dbx_client)
-        agent = build_agent(aws_client, dbx_client, settings)
+    with gateway_client(settings.gateway_url, aws_secret) as aws_client, ExitStack() as stack:
+        aws_backend = McpToolBackend(aws_client, tool_prefix=GATEWAY_TOOL_PREFIX)
+
+        def open_databricks() -> McpToolBackend:
+            """Connect to the Databricks MCP server on first use.
+
+            Opened lazily so a DOCX job never needs Databricks credentials: the AWS half of the
+            solution stays independently deployable and demonstrable before the Databricks
+            workspace exists. Verified on a live stack - with an unfilled `docintel/databricks`
+            secret, eager connection failed every DOCX job with `unknown url type:
+            '/oidc/v1/token'` (empty host) before any document was ever read.
+            """
+            dbx_secret = secrets.get_secret_json(
+                settings.databricks_secret_arn, region=settings.region
+            )
+            if not str(dbx_secret.get("host", "")).strip():
+                raise ProcessorError(
+                    "Databricks is not configured yet: secret "
+                    f"{settings.databricks_secret_arn} has an empty `host`. "
+                    "Run `make link` after deploying the Databricks bundle."
+                )
+            dbx_client = stack.enter_context(databricks_client(dbx_secret))
+            return McpToolBackend(dbx_client)
+
+        agent = build_agent(aws_client, None, settings)
         yield WorkflowDeps(
             aws_backend=aws_backend,
             docx_processor=AwsDocxProcessor(delegate=_build_delegate(settings)),
             pdf_processor=DatabricksPdfProcessor(
-                aws_backend=aws_backend, databricks_backend=dbx_backend
+                aws_backend=aws_backend, databricks_backend=open_databricks
             ),
             stream_llm=lambda job_id, prompt: stream_llm(agent, job_id, prompt),
         )
@@ -148,7 +179,7 @@ def mark_job_failed_best_effort(settings: Settings, job_id: str, message: str) -
     try:
         aws_secret = secrets.get_secret_json(settings.aws_mcp_secret_arn, region=settings.region)
         with gateway_client(settings.gateway_url, aws_secret) as aws_client:
-            backend = McpToolBackend(aws_client)
+            backend = McpToolBackend(aws_client, tool_prefix=GATEWAY_TOOL_PREFIX)
             require_ok(
                 backend.call(
                     "update_job_status",

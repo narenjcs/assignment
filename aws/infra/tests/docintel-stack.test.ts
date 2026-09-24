@@ -353,4 +353,27 @@ describe('IAM least privilege', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('gateway declares a non-empty MCP protocol configuration (service rejects an empty one)', () => {
+    template.hasResourceProperties('AWS::BedrockAgentCore::Gateway', {
+      ProtocolConfiguration: {
+        Mcp: {
+          Instructions: Match.anyValue(),
+          SupportedVersions: Match.arrayWith(['2025-06-18']),
+        },
+      },
+    });
+  });
+
+  it('serves the API through the same CloudFront distribution (single origin, no CORS)', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: {
+        CacheBehaviors: Match.arrayWith(
+          ['/health', '/uploads', '/jobs', '/jobs/*', '/chat'].map((PathPattern) =>
+            Match.objectLike({ PathPattern, ViewerProtocolPolicy: 'redirect-to-https' }),
+          ),
+        ),
+      },
+    });
+  });
 });

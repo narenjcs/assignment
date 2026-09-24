@@ -64,8 +64,20 @@ class DatabricksPdfProcessor:
     """Runs a `docType=pdf` job via the Databricks MCP server (PLAN §2.2 sync/async flows)."""
 
     aws_backend: ToolBackend
-    databricks_backend: ToolBackend
+    databricks_backend: Callable[[], ToolBackend]
+    """Opens the Databricks MCP session on first use (see `tools.workflow_session`).
+
+    A callable rather than an open backend so a DOCX job never connects to Databricks - the AWS
+    half stays deployable and demonstrable before the workspace exists.
+    """
     poll: PollConfig = field(default_factory=PollConfig)
+    _dbx: ToolBackend | None = field(default=None, init=False, repr=False)
+
+    def _databricks(self) -> ToolBackend:
+        """Return the Databricks backend, opening the session on first use and reusing it after."""
+        if self._dbx is None:
+            self._dbx = self.databricks_backend()
+        return self._dbx
 
     def run(self, job: dict, mode: str) -> dict:
         """PLAN.md §2.7: `run_pdf_agent` returns `data={mode:'sync', result}` (sync) or
@@ -87,7 +99,7 @@ class DatabricksPdfProcessor:
             run_args["source_s3_key"] = job["s3Key"]
         timeout = _SYNC_RUN_TIMEOUT_S if mode == "sync" else DEFAULT_READ_TIMEOUT_S
         started = require_ok(
-            self.databricks_backend.call("run_pdf_agent", run_args, read_timeout_seconds=timeout),
+            self._databricks().call("run_pdf_agent", run_args, read_timeout_seconds=timeout),
             "run_pdf_agent",
         )
         if mode == "sync":
@@ -104,7 +116,7 @@ class DatabricksPdfProcessor:
         interval = self.poll.initial_interval_s
         for _ in range(self.poll.max_attempts):
             status = require_ok(
-                self.databricks_backend.call("get_pdf_run_status", {"run_id": run_id}),
+                self._databricks().call("get_pdf_run_status", {"run_id": run_id}),
                 "get_pdf_run_status",
             )
             state = status.get("state")
@@ -132,7 +144,7 @@ class DatabricksPdfProcessor:
         if result.get("volumePath"):
             return result
         document = require_ok(
-            self.databricks_backend.call("get_document_result", {"job_id": job_id}),
+            self._databricks().call("get_document_result", {"job_id": job_id}),
             "get_document_result",
         )
         if not document.get("found", False):

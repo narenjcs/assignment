@@ -15,7 +15,7 @@ import logging
 from bedrock_agentcore import BedrockAgentCoreApp, RequestContext
 from docintel_common import secrets
 from docintel_common.config import get_settings
-from docintel_common.mcp_backend import McpToolBackend, gateway_client
+from docintel_common.mcp_backend import GATEWAY_TOOL_PREFIX, McpToolBackend, gateway_client
 from enrich import LlmCall, run_docx_job
 from prompts import SYSTEM_PROMPT
 from strands import Agent
@@ -35,7 +35,7 @@ async def handler(payload: dict, context: RequestContext) -> dict:
     logger.info("docx job starting", extra={"job_id": job_id, "session_id": context.session_id})
     secret = secrets.get_secret_json(settings.aws_mcp_secret_arn, region=settings.region)
     with gateway_client(settings.gateway_url, secret) as client:
-        backend = McpToolBackend(client)
+        backend = McpToolBackend(client, tool_prefix=GATEWAY_TOOL_PREFIX)
         event = await run_docx_job(backend, _build_llm_call(), job_id, settings.bedrock_model_id)
     return _to_response(job_id, event)
 

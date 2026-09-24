@@ -43,7 +43,7 @@ def test_databricks_pdf_processor_sync_mode_returns_run_result_directly() -> Non
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b)
     )
 
     result = processor.run({"jobId": "job-2", "fileName": "f.pdf"}, "sync")
@@ -62,7 +62,7 @@ def test_databricks_pdf_processor_passes_download_url_from_tool_response() -> No
         {"run_pdf_agent": {"ok": True, "data": {"mode": "sync", "result": {}}}}
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b)
     )
 
     processor.run({"jobId": "job-2b", "fileName": "f.pdf"}, "sync")
@@ -79,7 +79,7 @@ def test_databricks_pdf_processor_passes_source_s3_key_when_job_has_one() -> Non
         {"run_pdf_agent": {"ok": True, "data": {"mode": "sync", "result": {}}}}
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b)
     )
 
     processor.run({"jobId": "job-2c", "fileName": "f.pdf", "s3Key": "uploads/f.pdf"}, "sync")
@@ -115,7 +115,7 @@ def test_databricks_pdf_processor_async_mode_uses_ready_result_without_document_
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend, poll=_FAST_POLL
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b), poll=_FAST_POLL
     )
 
     result = processor.run({"jobId": "job-3", "fileName": "f.pdf"}, "async")
@@ -152,7 +152,7 @@ def test_databricks_pdf_processor_async_mode_enriches_missing_volume_path() -> N
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend, poll=_FAST_POLL
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b), poll=_FAST_POLL
     )
 
     result = processor.run({"jobId": "job-3b", "fileName": "f.pdf"}, "async")
@@ -179,7 +179,7 @@ def test_databricks_pdf_processor_async_mode_enrichment_skipped_when_not_found()
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend, poll=_FAST_POLL
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b), poll=_FAST_POLL
     )
 
     result = processor.run({"jobId": "job-3c", "fileName": "f.pdf"}, "async")
@@ -206,7 +206,7 @@ def test_databricks_pdf_processor_async_mode_raises_on_failed_state_without_fetc
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend, poll=_FAST_POLL
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b), poll=_FAST_POLL
     )
 
     with pytest.raises(processors.ProcessorError, match="OOM"):
@@ -231,7 +231,7 @@ def test_databricks_pdf_processor_async_mode_raises_when_success_has_no_result()
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend, poll=_FAST_POLL
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b), poll=_FAST_POLL
     )
 
     with pytest.raises(processors.ProcessorError, match="succeeded without a result"):
@@ -252,7 +252,7 @@ def test_databricks_pdf_processor_async_mode_raises_when_polling_exhausted() -> 
         }
     )
     processor = processors.DatabricksPdfProcessor(
-        aws_backend=aws_backend, databricks_backend=dbx_backend, poll=_FAST_POLL
+        aws_backend=aws_backend, databricks_backend=(lambda b=dbx_backend: b), poll=_FAST_POLL
     )
 
     with pytest.raises(processors.ProcessorError, match="did not finish"):

@@ -113,6 +113,10 @@ def require_ok(payload: ToolPayloadIn, tool: str) -> ToolPayload:
     return dict(payload)
 
 
+GATEWAY_TOOL_PREFIX = "jobs___"
+"""Prefix AgentCore Gateway adds to the `jobs` Lambda target's tools (CDK `addLambdaTarget`)."""
+
+
 class McpToolBackend:
     """`ToolBackend` over an already-open `strands.tools.mcp.MCPClient`.
 
@@ -120,9 +124,15 @@ class McpToolBackend:
     `run_pdf_agent`) is called at most once.
     """
 
-    def __init__(self, client: McpClientLike) -> None:
+    def __init__(self, client: McpClientLike, *, tool_prefix: str = "") -> None:
         self._client = client
         self._ids = count(1)
+        # AgentCore Gateway exposes each target's tools as `<targetName>___<tool>`, so the AWS
+        # backend must send `jobs___get_job` while the agent code (and the Databricks server,
+        # which uses bare names) keeps using the logical name. Verified on a live gateway:
+        # list_tools returned jobs___get_job, jobs___update_job_status, ... and calling the bare
+        # name failed with `MCPError: Unknown tool: update_job_status`.
+        self._tool_prefix = tool_prefix
 
     def call(
         self,
@@ -131,10 +141,12 @@ class McpToolBackend:
         *,
         read_timeout_seconds: float = DEFAULT_READ_TIMEOUT_S,
     ) -> ToolPayload:
+        wire_name = f"{self._tool_prefix}{name}"
+
         def _invoke() -> dict:
             tool_use_id = f"call-{next(self._ids)}"
             timeout = timedelta(seconds=read_timeout_seconds)
-            return dict(self._client.call_tool_sync(tool_use_id, name, dict(args), timeout))
+            return dict(self._client.call_tool_sync(tool_use_id, wire_name, dict(args), timeout))
 
         if name in IDEMPOTENT_READ_TOOLS:
             raw = retrying(_invoke, _RETRY_ON_TRANSPORT_ERRORS)

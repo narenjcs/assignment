@@ -50,7 +50,19 @@ export class Gateway extends Construct {
   private buildGateway(props: GatewayProps): agentcore.Gateway {
     return new agentcore.Gateway(this, 'Gateway', {
       gatewayName: props.naming.resource('gateway'),
-      protocolConfiguration: agentcore.GatewayProtocol.mcp(),
+      // The service rejects an empty MCP configuration with "MCP configuration cannot be empty"
+      // (deploy-time 400, not caught by synth), so at least one of instructions / searchType /
+      // supportedVersions must be set. The instructions are model-facing: they tell an agent
+      // connecting to this gateway what the tool surface is for.
+      protocolConfiguration: agentcore.GatewayProtocol.mcp({
+        instructions:
+          'DocIntel job tools. Use these to read and update document-processing jobs: get_job ' +
+          'and list_jobs to read state, update_job_status and append_job_event to report ' +
+          'progress, save_job_result to persist the final structured result, extract_docx_text ' +
+          'to pull text out of a DOCX in S3, and get_download_url to hand a document to another ' +
+          'cloud. Always report progress before and after long steps.',
+        supportedVersions: [agentcore.MCPProtocolVersion.MCP_2025_06_18],
+      }),
       authorizerConfiguration: agentcore.GatewayAuthorizer.usingCognito({
         userPool: props.userPool,
         allowedClients: [props.userPoolClient],

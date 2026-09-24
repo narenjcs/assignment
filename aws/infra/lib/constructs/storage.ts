@@ -1,5 +1,6 @@
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import type * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -10,6 +11,8 @@ export interface StorageProps {
   readonly naming: Naming;
 }
 
+const API_PATH_PATTERNS = ['/health', '/uploads', '/jobs', '/jobs/*', '/chat'] as const;
+/** API routes served from the Lambda Function URL origin (PLAN.md §2.6). */
 const SPA_ERROR_CODES = [403, 404];
 
 /**
@@ -59,6 +62,35 @@ export class Storage extends Construct {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+  }
+
+  /**
+   * Route the API's Lambda Function URL through this same CloudFront distribution.
+   *
+   * Without this the SPA has to call the `*.lambda-url.*.on.aws` host directly, which (a) is a
+   * second origin, so every call is cross-origin, and (b) is refused outright by some upstream
+   * DNS resolvers - verified on the demo network, where the router returns REFUSED for that
+   * hostname while resolving every other AWS domain. Serving the API under the CloudFront domain
+   * makes the whole app single-origin, so CORS disappears and only one hostname must resolve.
+   *
+   * Caching is disabled and all methods are allowed because these are dynamic, per-request
+   * endpoints, and `ALL_VIEWER_EXCEPT_HOST_HEADER` is required: a Function URL origin rejects a
+   * forwarded viewer `Host` header.
+   */
+  addApiBehaviors(functionUrl: lambda.FunctionUrl): void {
+    const origin = new origins.FunctionUrlOrigin(functionUrl, {
+      // SSE streams stay open for minutes while an agent works; don't cut them off early.
+      readTimeout: Duration.seconds(60),
+      keepaliveTimeout: Duration.seconds(60),
+    });
+    for (const pathPattern of API_PATH_PATTERNS) {
+      this.distribution.addBehavior(pathPattern, origin, {
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      });
+    }
   }
 
   private buildDistribution(): cloudfront.Distribution {

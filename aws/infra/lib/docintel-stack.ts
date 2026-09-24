@@ -65,11 +65,14 @@ export class DocIntelStack extends Stack {
     );
 
     const api = new Api(this, 'Api', { apiFunction: appLambdas.apiFunction });
+    // Serve the API under the CloudFront domain too, so the SPA is single-origin (no CORS)
+    // and only the CloudFront hostname has to resolve for a browser to use the app.
+    storage.addApiBehaviors(api.functionUrl);
     new Web(this, 'Web', {
       webBucket: storage.webBucket,
       distribution: storage.distribution,
       frontendDistPath: ctx.paths.frontendDistPath,
-      apiUrl: api.functionUrl.url,
+      apiUrl: `https://${storage.distribution.distributionDomainName}`,
     });
 
     writeOutputs(this, { storage, jobsTable, auth, gateway, runtimes, api });

@@ -32,6 +32,14 @@ function bundling(): nodejs.BundlingOptions {
     minify: true,
     sourceMap: true,
     target: 'node22',
+    // esbuild emits ESM, but bundled CommonJS dependencies (e.g. `mammoth`, used for DOCX text)
+    // still call `require(...)` at load time, which ESM has no definition for — the function then
+    // dies at INIT with `Dynamic require of "fs" is not supported`. This banner recreates a
+    // working `require` from the module URL so those dependencies load. Verified against a real
+    // deploy: without it the mcp-tools function fails every invocation.
+    banner:
+      "import{createRequire as __docintelCreateRequire}from'node:module';" +
+      'const require=__docintelCreateRequire(import.meta.url);',
   };
 }
 
