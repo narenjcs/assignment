@@ -108,6 +108,40 @@ Keep Tailwind 4; no component library.
 - **A11y**: state never colour-only (icon + label), focus rings, live region announcing status
   changes, keyboard-operable diagram nodes.
 
+### 3.1 Palette (the one to implement)
+
+Audience: US cloud/data engineers and architects evaluating this as a work sample. What reads as
+credible to them is **restraint** — the visual language of Linear, Stripe, Vercel and the
+Databricks brand site: near-black surfaces, generous whitespace, one confident accent, and colour
+that *means something*. Deliberately **not** patriotic red/white/blue, which reads as novelty and
+undercuts the engineering.
+
+Three colour jobs, never mixed:
+
+| Job | Family | Tokens |
+|---|---|---|
+| **Provenance** — which cloud did this | warm | `--color-brand-aws: #c2410c` (deep orange; `#ff9900` only as a large-fill accent, never text) · `--color-brand-databricks: #ff3621` (their real brand red) |
+| **State** — what is happening | cool | queued `#0284c7` sky · in-flight `#6366f1` indigo · done `#059669` emerald · failed `#e11d48` rose |
+| **Surface & text** — everything else | neutral | light: `#fafaf9` page / `#ffffff` card / `#0c0a09` ink · dark: `#0a0a0b` page / `#141416` card / `#fafaf9` ink |
+
+**Primary accent: indigo `#6366f1`.** Cool, so it never competes with the two warm provenance
+colours, and it is the current visual signal for AI tooling in US SaaS. Use it for the active
+state, focus rings, primary buttons and the live edge in the flow diagram — and nowhere else.
+
+Rules that make it look designed rather than decorated:
+- **One accent.** If something is not interactive, in-flight, or focused, it is neutral.
+- **Colour is never the only signal** — always paired with an icon or label (also the a11y rule).
+- **Borders are hairlines** (`1px`, ~8% ink) and shadows are soft and low (`0 1px 2px`,
+  `0 8px 24px -12px`). No thick outlines, no chunky drop shadows.
+- **Contrast is checked**, not assumed: body text ≥ 7:1, secondary ≥ 4.5:1, in both themes.
+- **Dark mode is the default-looking one.** Engineers demo in dark; make it the polished path and
+  ensure light is equally correct.
+- **Type**: one sans (system stack is fine and fast), 1.25 scale, `font-variant-numeric:
+  tabular-nums` for every metric so figures align.
+- **Motion is quiet**: 150–200 ms ease-out, only on state change; nothing loops except the single
+  in-flight pulse, and that respects `prefers-reduced-motion`.
+
+
 ---
 
 ## 4. Deployment
