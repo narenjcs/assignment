@@ -26,3 +26,8 @@ targets:
     default: true
     workspace:
       profile: docintel
+      # Deploy our artifacts to an obviously-named shared path instead of the default
+      # /Users/<you>/.bundle/... . The workspace tree otherwise mixes this project's files into a
+      # personal home folder next to the UUID-named home folders Databricks creates for service
+      # principals, which makes it hard to tell what belongs to this project.
+      root_path: /Workspace/Shared/docintel/${bundle.target}
