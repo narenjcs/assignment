@@ -23,13 +23,34 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from collections.abc import Coroutine
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "src"))
 
-from docintel_app import agent
-from docintel_app.config import Settings
-from docintel_app.deps import build_deps
+def _app_src() -> Path:
+    """Locate the bundled `app/src` directory so `docintel_app` is importable.
+
+    Serverless `spark_python_task` executes this file without defining `__file__`, so a bare
+    `Path(__file__)` raises `NameError: name '__file__' is not defined` before the job does any
+    work. Fall back to the working directory and walk upwards looking for the package.
+    """
+    try:
+        start = Path(__file__).resolve().parent.parent
+    except NameError:  # serverless task execution
+        start = Path.cwd()
+    for candidate in (start, *start.parents):
+        src = candidate / "app" / "src"
+        if (src / "docintel_app").is_dir():
+            return src
+    return start / "app" / "src"
+
+
+sys.path.insert(0, str(_app_src()))
+
+from docintel_app import agent  # noqa: E402 — import must follow the sys.path bootstrap above
+from docintel_app.config import Settings  # noqa: E402 — same
+from docintel_app.deps import build_deps  # noqa: E402 — same
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +80,21 @@ def _build_settings(config: dict[str, str], secret_scope: str) -> Settings:
     )
 
 
+def _run_async(coro: Coroutine[object, object, dict]) -> dict:
+    """Run `coro` to completion whether or not an event loop is already running.
+
+    Serverless `spark_python_task` executes this script inside an existing event loop, where
+    `asyncio.run` raises "asyncio.run() cannot be called from a running event loop". In that case
+    run it on a worker thread that owns its own loop.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 def main(argv: list[str]) -> int:
     """Parse job parameters, build real `Deps`, and run the PDF agent pipeline once."""
     if len(argv) < _ARG_COUNT:
@@ -81,7 +117,7 @@ def main(argv: list[str]) -> int:
         "run_mode": "async",
         "run_id": run_id or None,
     }
-    result = asyncio.run(agent.run(deps, job))
+    result = _run_async(agent.run(deps, job))
     logger.info("pdf agent job %s finished: %s", job_id, result)
     return 0 if result.get("ok") else 1
 

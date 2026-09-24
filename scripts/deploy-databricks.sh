@@ -106,6 +106,13 @@ unset SP_SECRET_VALUE
 unset SP_SECRET_JSON
 echo "==> Wrote SP credentials to ${ENV_FILE} (values not printed)"
 
+# A freshly created service principal has NO entitlements, and without `workspace-access` it
+# cannot call workspace resources: an OAuth token for it is valid and correctly scoped, yet every
+# request to the Databricks App returns 401 with no hint as to why. Grant it explicitly.
+echo "==> Ensuring '${SP_NAME}' has the workspace-access entitlement"
+db service-principals patch "${SP_ID}" --json '{"Operations":[{"op":"add","path":"entitlements","value":[{"value":"workspace-access"}]}],"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"]}' >/dev/null 2>&1 \
+  || echo "    (entitlement already present or patch not permitted)"
+
 # 4. Catalog must pre-exist; the bundle only manages the schema below it.
 if db catalogs get "${CATALOG}" >/dev/null 2>&1; then
   echo "==> Catalog '${CATALOG}' already exists"
@@ -194,6 +201,14 @@ if [[ -n "${APP_SP_ID}" ]]; then
     --json "{\"changes\": [{\"principal\": \"${APP_SP_ID}\", \"add\": [\"USE_SCHEMA\", \"SELECT\", \"MODIFY\", \"CREATE_TABLE\"]}]}" >/dev/null
   db grants update volume "${CATALOG}.${SCHEMA}.inbox" \
     --json "{\"changes\": [{\"principal\": \"${APP_SP_ID}\", \"add\": [\"READ_VOLUME\", \"WRITE_VOLUME\"]}]}" >/dev/null
+  # The app triggers the async PDF job as itself, so it needs run rights on that job too;
+  # without them the job is invisible to it and run_pdf_agent fails with
+  # "no Databricks job named 'docintel_pdf_agent'".
+  APP_JOB_ID="$(db jobs list --name "${JOB_NAME}" -o json | jval 'd[0]["job_id"] if d else ""')"
+  if [[ -n "${APP_JOB_ID}" ]]; then
+    db jobs update-permissions "${APP_JOB_ID}" \
+      --json "{\"access_control_list\": [{\"service_principal_name\": \"${APP_SP_ID}\", \"permission_level\": \"CAN_MANAGE_RUN\"}]}" >/dev/null
+  fi
 else
   echo "!! could not resolve the app's service principal; grant UC privileges manually" >&2
 fi
