@@ -188,6 +188,21 @@ def _error_text(result: dict) -> str:
     return ""
 
 
+def gateway_access_token(secret: ToolPayloadIn) -> str:
+    """Mint (or reuse, via `auth`'s cache) the Cognito token used against the AWS Gateway.
+
+    Databricks serverless resolves DNS through an allowlist that excludes the Cognito token
+    endpoint, so the Databricks agent cannot mint its own token to call back into AWS. The
+    orchestrator passes this one to `run_pdf_agent` instead.
+    """
+    return auth.cognito_m2m_token(
+        str(secret["tokenUrl"]),
+        str(secret["clientId"]),
+        str(secret["clientSecret"]),
+        str(secret["scope"]),
+    )
+
+
 def gateway_client(gateway_url: str, secret: ToolPayloadIn, *, prefix: str = "aws") -> MCPClient:
     """Build (unopened) an `MCPClient` for the AWS Gateway, Cognito-bearer authenticated."""
     token = auth.cognito_m2m_token(

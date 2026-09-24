@@ -70,8 +70,16 @@ def cognito_m2m_token(token_url: str, client_id: str, client_secret: str, scope:
 class AwsToolBackend:
     """Calls tools on the AWS MCP Gateway over streamable HTTP, with Cognito bearer auth."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, token: str | None = None) -> None:
+        """`token`: a Cognito access token minted by the AWS side.
+
+        Serverless compute here resolves DNS through an allowlist: the AgentCore Gateway and S3
+        resolve, but the Cognito token endpoint does NOT ("Temporary failure in name
+        resolution"). When AWS passes its own token in, we skip minting one entirely and this
+        side never needs to reach Cognito.
+        """
         self._settings = settings
+        self._token = token
 
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Call one AWS Gateway MCP tool by name, retrying transient failures with backoff."""
@@ -98,13 +106,16 @@ class AwsToolBackend:
         settings = self._settings
         # `cognito_m2m_token` is a blocking `urllib` call; run it off the event loop so one PDF
         # job's token fetch/refresh doesn't stall `/api/health` and other concurrent MCP calls.
-        token = await asyncio.to_thread(
-            cognito_m2m_token,
-            settings.aws_mcp_token_url,
-            settings.aws_mcp_client_id,
-            settings.aws_mcp_client_secret,
-            settings.aws_mcp_scope,
-        )
+        if self._token:
+            token = self._token
+        else:
+            token = await asyncio.to_thread(
+                cognito_m2m_token,
+                settings.aws_mcp_token_url,
+                settings.aws_mcp_client_id,
+                settings.aws_mcp_client_secret,
+                settings.aws_mcp_scope,
+            )
         http_client = httpx2.AsyncClient(
             headers={"Authorization": f"Bearer {token}"}, timeout=_CALL_TIMEOUT_SECONDS
         )

@@ -26,6 +26,8 @@ class Settings(BaseModel):
     aws_mcp_client_id: str = Field(min_length=1)
     aws_mcp_client_secret: str = Field(min_length=1)
     aws_mcp_scope: str = Field(min_length=1)
+    aws_secret_scope: str = "docintel"
+    """Databricks secret scope; the async job reads the AWS gateway token from here."""
 
     @property
     def uc_table(self) -> str:
@@ -55,4 +57,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         aws_mcp_client_id=source.get("AWS_MCP_CLIENT_ID", ""),
         aws_mcp_client_secret=source.get("AWS_MCP_CLIENT_SECRET", ""),
         aws_mcp_scope=source.get("AWS_MCP_SCOPE", ""),
+        aws_secret_scope=source.get("AWS_SECRET_SCOPE", "docintel"),
     )

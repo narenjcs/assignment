@@ -204,6 +204,10 @@ if [[ -n "${APP_SP_ID}" ]]; then
   # The app triggers the async PDF job as itself, so it needs run rights on that job too;
   # without them the job is invisible to it and run_pdf_agent fails with
   # "no Databricks job named 'docintel_pdf_agent'".
+  # The app writes the short-lived AWS gateway token into the secret scope before triggering the
+  # async job (job parameters are stored in run history, so a token must never be one).
+  db secrets put-acl "${SECRET_SCOPE}" "${APP_SP_ID}" WRITE >/dev/null 2>&1 \
+    || echo "    (scope WRITE acl already present)"
   APP_JOB_ID="$(db jobs list --name "${JOB_NAME}" -o json | jval 'd[0]["job_id"] if d else ""')"
   if [[ -n "${APP_JOB_ID}" ]]; then
     db jobs update-permissions "${APP_JOB_ID}" \

@@ -22,7 +22,7 @@ class Deps:
     aws: AwsToolBackend
 
 
-def build_deps(settings: Settings) -> Deps:
+def build_deps(settings: Settings, *, aws_token: str | None = None) -> Deps:
     """Build the real `Deps`: a Databricks SDK client, an FMAPI client, and the AWS backend.
 
     Deliberately lives here (not in `server.py`) so it has no `fastapi` import: the serverless
@@ -35,5 +35,8 @@ def build_deps(settings: Settings) -> Deps:
     openai_client = llm.build_fmapi_client(workspace.config.host, token)
     llm_client = FmapiClient(workspace, openai_client)
     return Deps(
-        settings=settings, workspace=workspace, llm_client=llm_client, aws=AwsToolBackend(settings)
+        settings=settings,
+        workspace=workspace,
+        llm_client=llm_client,
+        aws=AwsToolBackend(settings, token=aws_token),
     )

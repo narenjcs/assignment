@@ -27,6 +27,7 @@ from docintel_common.mcp_backend import (
     GATEWAY_TOOL_PREFIX,
     McpToolBackend,
     databricks_client,
+    gateway_access_token,
     gateway_client,
     require_ok,
 )
@@ -162,7 +163,9 @@ def workflow_session(settings: Settings) -> Iterator[WorkflowDeps]:
             aws_backend=aws_backend,
             docx_processor=AwsDocxProcessor(delegate=_build_delegate(settings)),
             pdf_processor=DatabricksPdfProcessor(
-                aws_backend=aws_backend, databricks_backend=open_databricks
+                aws_backend=aws_backend,
+                databricks_backend=open_databricks,
+                aws_token_provider=lambda: gateway_access_token(aws_secret),
             ),
             stream_llm=lambda job_id, prompt: stream_llm(agent, job_id, prompt),
         )

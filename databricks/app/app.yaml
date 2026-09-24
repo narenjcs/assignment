@@ -34,6 +34,8 @@ env:
     value: 'workspace'
   - name: 'DOCINTEL_SCHEMA'
     value: 'docs'
+  - name: 'AWS_SECRET_SCOPE'
+    value: 'docintel'
   - name: 'DATABRICKS_WAREHOUSE_ID'
     valueFrom: 'sql-warehouse'
   - name: 'DATABRICKS_LLM_ENDPOINT'

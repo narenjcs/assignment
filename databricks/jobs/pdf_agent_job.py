@@ -102,13 +102,18 @@ def main(argv: list[str]) -> int:
         return 1
     job_id, download_url, file_name, source_s3_key = argv[1:5]
     warehouse_id, llm_endpoint, catalog, schema, secret_scope, run_id = argv[5:11]
+    # Read the AWS gateway token from the secret scope, never a job parameter:
+    # parameters are stored in run history and shown in the UI.
+    aws_token = _secret(secret_scope, "aws_access_token")
     config = {
         "warehouse_id": warehouse_id,
         "llm_endpoint": llm_endpoint,
         "catalog": catalog,
         "schema_name": schema,
     }
-    deps = build_deps(_build_settings(config, secret_scope))
+    # The Cognito token endpoint is not resolvable from serverless (DNS allowlist), so the
+    # AWS side mints the token and passes it in as a job parameter.
+    deps = build_deps(_build_settings(config, secret_scope), aws_token=aws_token or None)
     job = {
         "job_id": job_id,
         "download_url": download_url,

@@ -70,6 +70,8 @@ class DatabricksPdfProcessor:
     A callable rather than an open backend so a DOCX job never connects to Databricks - the AWS
     half stays deployable and demonstrable before the workspace exists.
     """
+    aws_token_provider: Callable[[], str] | None = None
+    """Returns a Cognito access token to hand to the Databricks agent (see `run`)."""
     poll: PollConfig = field(default_factory=PollConfig)
     _dbx: ToolBackend | None = field(default=None, init=False, repr=False)
 
@@ -97,6 +99,10 @@ class DatabricksPdfProcessor:
         }
         if job.get("s3Key"):
             run_args["source_s3_key"] = job["s3Key"]
+        # Databricks serverless resolves DNS through an allowlist that excludes the Cognito token
+        # endpoint, so the PDF agent cannot mint a token to call back into AWS. Hand it ours.
+        if self.aws_token_provider is not None:
+            run_args["aws_token"] = self.aws_token_provider()
         timeout = _SYNC_RUN_TIMEOUT_S if mode == "sync" else DEFAULT_READ_TIMEOUT_S
         started = require_ok(
             self._databricks().call("run_pdf_agent", run_args, read_timeout_seconds=timeout),

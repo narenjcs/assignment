@@ -9,12 +9,17 @@ scalar parameters rather than a bundled dict — even though that puts it over r
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from typing import Any
 
 from docintel_app import agent, uc
+from docintel_app.aws_mcp import AwsToolBackend
 from docintel_app.deps import Deps
 from docintel_app.schemas import document_row_to_job_result, err_result, ok_result
 from docintel_app.tools import ToolFn, guarded
+
+AWS_TOKEN_SECRET_KEY = "aws_access_token"
+"""Scope key the async job reads its AWS gateway token from (never a job parameter)."""
 
 JOB_NAME = "docintel_pdf_agent"
 
@@ -36,6 +41,7 @@ def build_run_pdf_agent(deps: Deps) -> ToolFn:
         file_name: str,
         source_s3_key: str | None = None,
         mode: str = "sync",
+        aws_token: str | None = None,
     ) -> dict[str, Any]:
         """Process a PDF job end to end (PLAN.md §2.7 pinned cross-cloud shape).
 
@@ -43,6 +49,10 @@ def build_run_pdf_agent(deps: Deps) -> ToolFn:
         `{mode: "sync", result: JobResult}`. `mode="async"` triggers the `docintel_pdf_agent`
         Databricks job and returns `{mode: "async", run_id, state: "PENDING"}` immediately —
         poll `get_pdf_run_status` for completion.
+
+        `aws_token`: an AWS Cognito access token minted by the caller. Serverless compute here
+        resolves DNS through an allowlist that excludes the Cognito token endpoint, so this side
+        cannot mint one itself; passing it in is what lets the agent call back into AWS.
         """
         job = {
             "job_id": job_id,
@@ -51,8 +61,11 @@ def build_run_pdf_agent(deps: Deps) -> ToolFn:
             "source_s3_key": source_s3_key,
         }
         if mode == "async":
-            return await _trigger_async_run(deps, job)
-        run_result = await agent.run(deps, {**job, "run_mode": "sync"})
+            return await _trigger_async_run(deps, job, aws_token)
+        run_deps = (
+            replace(deps, aws=AwsToolBackend(deps.settings, token=aws_token)) if aws_token else deps
+        )
+        run_result = await agent.run(run_deps, {**job, "run_mode": "sync"})
         if not run_result.get("ok"):
             return run_result
         return ok_result({"mode": "sync", "result": run_result["data"]})
@@ -65,13 +78,28 @@ def _find_job(deps: Deps) -> Any:
     return next(iter(deps.workspace.jobs.list(name=JOB_NAME)), None)
 
 
-async def _trigger_async_run(deps: Deps, job: dict[str, str | None]) -> dict[str, Any]:
-    """Find the `docintel_pdf_agent` job by name and trigger it with `job` as its parameters."""
+async def _trigger_async_run(
+    deps: Deps, job: dict[str, str | None], aws_token: str | None = None
+) -> dict[str, Any]:
+    """Find the `docintel_pdf_agent` job by name and trigger it with `job` as its parameters.
+
+    `aws_token` is deliberately NOT passed as a job parameter: Databricks stores job parameters
+    in run history and shows them in the UI, so a one-hour bearer token for the AWS gateway
+    would sit in a log. Write it to the secret scope instead — secrets are redacted in logs —
+    and let the job read it back with `dbutils.secrets`.
+    """
     # `jobs.list`/`jobs.run_now` are blocking Databricks SDK calls; run them on a worker thread
     # so triggering one job doesn't stall `/api/health` and other MCP calls.
     found = await asyncio.to_thread(_find_job, deps)
     if found is None or found.job_id is None:
         return err_result("job_not_found", f"no Databricks job named {JOB_NAME!r}")
+    if aws_token:
+        await asyncio.to_thread(
+            deps.workspace.secrets.put_secret,
+            scope=deps.settings.aws_secret_scope,
+            key=AWS_TOKEN_SECRET_KEY,
+            string_value=aws_token,
+        )
     params = {k: v for k, v in job.items() if v is not None}
     waiter = await asyncio.to_thread(
         deps.workspace.jobs.run_now, job_id=found.job_id, job_parameters=params
