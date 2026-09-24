@@ -16,13 +16,25 @@ set -euo pipefail
 # Never destructive: creates/updates resources only, no delete/destroy calls.
 
 TARGET="${1:-dev}"
-PROFILE="${DATABRICKS_PROFILE:-docintel}"
+PROFILE="${DATABRICKS_CONFIG_PROFILE:-${DATABRICKS_PROFILE:-docintel}}"
 BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../databricks" && pwd)"
 ENV_FILE="${BUNDLE_DIR}/../.env"
 
-CATALOG="${DOCINTEL_CATALOG:-docintel}"
-SCHEMA="${DOCINTEL_SCHEMA:-docs}"
-SECRET_SCOPE="${DOCINTEL_SECRET_SCOPE:-docintel}"
+# Load .env so running this script directly behaves the same as `make deploy-databricks`
+# (the Makefile includes/exports .env; a bare `bash scripts/deploy-databricks.sh` did not, so
+# settings written there were silently ignored).
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+fi
+
+# DATABRICKS_* are the names used in .env.example and the Makefile; DOCINTEL_* are accepted as
+# aliases so either spelling works.
+CATALOG="${DATABRICKS_CATALOG:-${DOCINTEL_CATALOG:-docintel}}"
+SCHEMA="${DATABRICKS_SCHEMA:-${DOCINTEL_SCHEMA:-docs}}"
+SECRET_SCOPE="${DATABRICKS_SECRET_SCOPE:-${DOCINTEL_SECRET_SCOPE:-docintel}}"
 SP_NAME="docintel-aws"
 APP_NAME="mcp-docintel"
 JOB_NAME="docintel_pdf_agent"
@@ -33,7 +45,12 @@ jval() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 echo "==> Deploying DocIntel bundle to target '${TARGET}' (profile '${PROFILE}')"
 
 # 1. Secret scope (idempotent) — ready for `make link` to populate AWS creds into.
-if db secrets list-scopes -o json | grep -q "\"name\":\"${SECRET_SCOPE}\""; then
+# Parse the JSON rather than grepping it: the CLI pretty-prints with spaces after the colon,
+# so a "name":"scope" substring match silently misses and the create below then fails the whole
+# script with `Scope docintel already exists!` on every re-run.
+if db secrets list-scopes -o json \
+  | jval "any(x.get('name') == '${SECRET_SCOPE}' for x in (d if isinstance(d, list) else d.get('scopes', [])))" \
+  | grep -q True; then
   echo "==> Secret scope '${SECRET_SCOPE}' already exists"
 else
   echo "==> Creating secret scope '${SECRET_SCOPE}'"
@@ -53,14 +70,39 @@ else
   SP_ID="$(db service-principals list --filter "displayName eq ${SP_NAME}" -o json | jval 'd[0]["id"]')"
 fi
 
-# 3. OAuth secret for the SP. The value is never echoed to stdout/log — it is
+# 3. OAuth secret for the SP. NOTE: --lifetime must carry a unit suffix ('15768000s');
+#    the CLI help says "in seconds" but the API parses a Go Duration and a bare number
+#    fails with "Could not parse request object: Error parsing Duration".
+#    The value is never echoed to stdout/log — it is
 #    captured straight into a shell variable and appended to a local .env line.
-echo "==> Creating OAuth secret for '${SP_NAME}' (value is not logged)"
-SP_SECRET_JSON="$(db service-principal-secrets-proxy create "${SP_ID}" --lifetime 15768000 -o json)"
+# Reuse the secret already in .env if there is one. A service principal is capped at 5 OAuth
+# secrets, so minting a fresh one on every run exhausts the quota
+# ("RESOURCE_EXHAUSTED: Cannot have more than 5 oauth secrets in one service principal")
+# and makes the script unusable after a few re-runs.
+EXISTING_SP_SECRET=""
+if [[ -f "${ENV_FILE}" ]]; then
+  EXISTING_SP_SECRET="$(grep -E '^DATABRICKS_SP_CLIENT_SECRET=' "${ENV_FILE}" | tail -1 | cut -d= -f2-)"
+fi
+if [[ -n "${EXISTING_SP_SECRET}" ]]; then
+  echo "==> Reusing existing OAuth secret for '${SP_NAME}' from ${ENV_FILE}"
+  SP_SECRET_JSON="$(printf '{"secret":"%s"}' "${EXISTING_SP_SECRET}")"
+else
+  echo "==> Creating OAuth secret for '${SP_NAME}' (value is not logged)"
+  SP_SECRET_JSON="$(db service-principal-secrets-proxy create "${SP_ID}" --lifetime 15768000s -o json)"
+fi
+unset EXISTING_SP_SECRET
+# Replace rather than append, so re-running never leaves two conflicting values in .env
+# (the last one wins when sourced, which silently masks a rotated secret).
+SP_SECRET_VALUE="$(echo "${SP_SECRET_JSON}" | jval 'd["secret"]')"
+touch "${ENV_FILE}"
+grep -v -E '^DATABRICKS_SP_CLIENT_(ID|SECRET)=' "${ENV_FILE}" >"${ENV_FILE}.tmp" || true
 {
   echo "DATABRICKS_SP_CLIENT_ID=${SP_APP_ID}"
-  echo "DATABRICKS_SP_CLIENT_SECRET=$(echo "${SP_SECRET_JSON}" | jval 'd["secret"]')"
-} >>"${ENV_FILE}"
+  echo "DATABRICKS_SP_CLIENT_SECRET=${SP_SECRET_VALUE}"
+} >>"${ENV_FILE}.tmp"
+mv "${ENV_FILE}.tmp" "${ENV_FILE}"
+chmod 600 "${ENV_FILE}"
+unset SP_SECRET_VALUE
 unset SP_SECRET_JSON
 echo "==> Wrote SP credentials to ${ENV_FILE} (values not printed)"
 
@@ -69,13 +111,62 @@ if db catalogs get "${CATALOG}" >/dev/null 2>&1; then
   echo "==> Catalog '${CATALOG}' already exists"
 else
   echo "==> Creating catalog '${CATALOG}'"
-  db catalogs create "${CATALOG}"
+  # On a Default Storage workspace the API refuses a catalog with no MANAGED LOCATION
+  # ("Metastore storage root URL does not exist"). Rather than fail the whole deploy, point the
+  # operator at the workspace's built-in catalog, which already has managed storage.
+  if ! db catalogs create "${CATALOG}"; then
+    echo "!!  Could not create catalog '${CATALOG}'." >&2
+    echo "    This workspace uses Default Storage, so a new catalog needs a MANAGED LOCATION" >&2
+    echo "    (or must be created in the UI). Easiest fix: reuse the built-in catalog by" >&2
+    echo "    setting DATABRICKS_CATALOG=workspace in .env and re-running this script." >&2
+    exit 1
+  fi
 fi
 
 # 5. Deploy the bundle: creates the schema, volume, job, and app. The app's own
 #    startup path runs sql/setup.sql's idempotent DDL to create document_results.
+# The app declares secret-backed env vars, so every key must already exist in the scope or the
+# app resource fails to create ("Invalid secret resource ...: Secret with scope docintel and key
+# aws_gateway_url does not exist"). `make link` runs *after* this (it needs the app URL), so seed
+# placeholders here for any key that is missing; link.sh then overwrites them with real values.
+echo "==> Ensuring AWS MCP secret keys exist (placeholders until \`make link\`)"
+EXISTING_KEYS="$(db secrets list-secrets "${SECRET_SCOPE}" -o json \
+  | jval "' '.join(x.get('key','') for x in (d if isinstance(d, list) else d.get('secrets', [])))")"
+for KEY in aws_gateway_url aws_mcp_token_url aws_mcp_client_id aws_mcp_client_secret aws_mcp_scope; do
+  if [[ " ${EXISTING_KEYS} " != *" ${KEY} "* ]]; then
+    printf '%s' "PENDING_MAKE_LINK" | db secrets put-secret "${SECRET_SCOPE}" "${KEY}"
+    echo "    seeded ${KEY}"
+  fi
+done
+unset EXISTING_KEYS
+
 echo "==> Running bundle deploy"
-(cd "${BUNDLE_DIR}" && databricks bundle deploy -t "${TARGET}" --profile "${PROFILE}" --auto-approve)
+# Databricks Asset Bundles drive Terraform under the hood and, by default, download it at first
+# use. On this CLI version that download fails with "unable to verify checksums signature:
+# openpgp: key expired" (HashiCorp rotated their signing key). Point the CLI at a local terraform
+# binary instead, which skips the download entirely.
+if [[ -z "${DATABRICKS_TF_EXEC_PATH:-}" ]] && command -v terraform >/dev/null 2>&1; then
+  DATABRICKS_TF_EXEC_PATH="$(command -v terraform)"
+  export DATABRICKS_TF_EXEC_PATH
+  echo "==> Using local terraform at ${DATABRICKS_TF_EXEC_PATH}"
+fi
+
+# Bundle variables are declared in databricks.yml; `warehouse_id` has no default, so it must be
+# supplied here or the deploy stops with "no value assigned to required variable warehouse_id".
+if [[ -z "${DATABRICKS_WAREHOUSE_ID:-}" ]]; then
+  echo "!! DATABRICKS_WAREHOUSE_ID is not set (see .env.example)." >&2
+  echo "   List them with: databricks warehouses list -p ${PROFILE}" >&2
+  exit 1
+fi
+(
+  cd "${BUNDLE_DIR}" && databricks bundle deploy -t "${TARGET}" --profile "${PROFILE}" \
+    --auto-approve \
+    --var "catalog=${CATALOG}" \
+    --var "schema=${SCHEMA}" \
+    --var "warehouse_id=${DATABRICKS_WAREHOUSE_ID}" \
+    --var "llm_endpoint=${DATABRICKS_LLM_ENDPOINT:-databricks-gpt-oss-120b}" \
+    --var "aws_secret_scope=${SECRET_SCOPE}"
+)
 
 # 6. Grant the SP the Unity Catalog privileges it needs to read/write results.
 echo "==> Granting Unity Catalog privileges to '${SP_NAME}'"

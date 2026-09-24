@@ -214,7 +214,7 @@ All tools return `{ok: true, data} | {ok: false, error: {code, message}}`. Pinne
 
 ## 4. Databricks side plan (Asset Bundle, profile `docintel`)
 
-1. **Cloud**: **Databricks on AWS** (decided 2026-09-24). The code is cloud-agnostic — the workspace is addressed only through the CLI profile — but an AWS-hosted workspace keeps the demo on one provider and leaves the door open to swap the presigned-URL handoff for a native S3 external location. An AWS host looks like `https://dbc-xxxxxxxx-xxxx.cloud.databricks.com`.
+1. **Cloud**: **Databricks on AWS** (decided 2026-09-24). The code is cloud-agnostic — the workspace is addressed only through the CLI profile — but an AWS-hosted workspace keeps the demo on one provider and leaves the door open to swap the presigned-URL handoff for a native S3 external location. Workspace in use: `https://dbc-34766815-3348.cloud.databricks.com` (provisioned 2026-09-24).
 2. **Auth**: `databricks auth login --host <ws> --profile docintel` (new profile; do not use `dev`/`prod`, which are Azure workspaces belonging to another project).
 3. **Prerequisites in workspace**: Unity Catalog enabled, serverless compute enabled, Databricks Apps enabled, a serverless SQL warehouse (for `ai_parse_document`), Foundation Model API endpoint (`databricks-gpt-oss-120b` or equivalent) visible in Serving.
 4. **Bundle resources** (`databricks/databricks.yml`):
