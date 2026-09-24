@@ -43,12 +43,12 @@ were found only by deploying** — see PLAN.md §0.1.
 
 ## What is left
 
-### 1. UI polish (code complete — deploy blocked on AWS login)
+### 1. UI polish — ✅ done and deployed
 
-All UI code is finished and verified locally: lint, 95 unit tests, `tsc`, the production
-build, and the file-length check all pass. The only thing left is shipping it —
-`make deploy-frontend` failed with `Your session has expired`. Log in to AWS again, re-run
-that one command (~20 s, no CloudFormation), then verify. Nothing else is outstanding.
+All UI work is finished, committed on branch `ui-polish-flow-dialog`, and live at
+<https://d3fhr1wqlh1ql9.cloudfront.net>. Lint, 95 unit tests, `tsc`, the production build
+and the file-length check all pass. Deployed bundle hash verified against the local build.
+Nothing is outstanding here.
 
 Specified in **[UI-PLAN.md](UI-PLAN.md)**, tracked as **P10 / U1–U7** in [TASKS.md](TASKS.md).
 
@@ -60,7 +60,7 @@ Specified in **[UI-PLAN.md](UI-PLAN.md)**, tracked as **P10 / U1–U7** in [TASK
 | U4 palette | ✅ done | yellow gone; AWS orange survives only as a large-fill accent, never text |
 | U5 agent trace restyle | ✅ done | cloud-coloured rail; collapses once the job is COMPLETED |
 | U6 scroll + a11y + skeletons | ✅ done | per-panel `scroll-panel` regions, focus trap, Esc-to-close |
-| U7 review + ship | ⛔ **blocked** | code gates green; **`make deploy-frontend` needs a fresh AWS login** |
+| U7 review + ship | ✅ done | deployed via `make deploy-frontend`; bundle hash verified live |
 
 **How to continue it:**
 ```bash
