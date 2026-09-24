@@ -70,7 +70,30 @@ curl -s https://d3fhr1wqlh1ql9.cloudfront.net/config.json  # verify after deploy
 ```
 Read UI-PLAN §1 (flow view), §3.1 (palette) and §4 (deployment) before touching the UI.
 
-### 2. Optional hardening (not required by the brief)
+### 2. Public access kill switch — ✅ in place, and the demo is LOCKED right now
+
+The API is an unauthenticated Lambda Function URL (PLAN.md §2.5), so while it is open anyone
+holding the CloudFront link can spend Bedrock/Databricks money through `POST /chat` and
+`POST /jobs/{id}/process`, write into the uploads bucket, and read every job in the table.
+Toggle it in seconds, with no redeploy and nothing torn down:
+
+```bash
+make unlock         # before a demo — API live again
+make lock           # after a demo — every route throttles
+make access-status  # which state am I in, plus a live probe of /health
+```
+
+It sets the `docintel-api` function's reserved concurrency to 0, so AWS refuses to start an
+invocation at all: routes fail at the throttle before any handler code, model call, or DynamoDB
+read. Locked returns HTTP 429 on every route, unlocked returns 200; both directions were
+verified against the live endpoint. The static SPA stays reachable either way, which is
+harmless — it is public HTML that does nothing without the API. See `scripts/access.sh`.
+
+**This does not fix `GET /jobs`**, which returns every job with no owner scoping once unlocked.
+That needs a per-user identity and is not a small change.
+
+
+### 3. Optional hardening (not required by the brief)
 
 - **API is unauthenticated** by design for the demo (PLAN §2.5), with a reserved-concurrency cap.
   Next step would be a shared-secret header or Cognito user login.

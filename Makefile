@@ -95,8 +95,17 @@ hooks: ## Install pre-commit hook running `make lint`
 dev-frontend: ## Run the SPA locally against the deployed API
 	@cd frontend && npm run dev
 
+lock: ## Block all public API traffic in seconds (no redeploy, reverse with `make unlock`)
+	@./scripts/access.sh lock
+
+unlock: ## Restore public API service after `make lock`
+	@./scripts/access.sh unlock
+
+access-status: ## Report whether the public API is locked, and probe it live
+	@./scripts/access.sh status
+
 destroy: ## Tear down AWS stack and Databricks bundle
 	@cd aws/infra && npx cdk destroy --force
 	@cd databricks && databricks bundle destroy --auto-approve -p $(DATABRICKS_CONFIG_PROFILE) || true
 
-.PHONY: help venv prereqs samples build build-agents deploy-frontend deploy-lambdas deploy-agents deploy-dbx-app deploy-dbx-job build-frontend deploy-aws deploy-databricks link e2e dev-frontend destroy lint format test check hooks
+.PHONY: help venv prereqs samples build build-agents deploy-frontend deploy-lambdas deploy-agents deploy-dbx-app deploy-dbx-job build-frontend deploy-aws deploy-databricks link e2e dev-frontend lock unlock access-status destroy lint format test check hooks
