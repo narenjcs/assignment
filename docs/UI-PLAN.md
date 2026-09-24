@@ -48,6 +48,14 @@ and `ts`.
 time); click → scroll the trace list to that event. Respect `prefers-reduced-motion` (no pulse,
 state changes only).
 
+**The existing Agent trace list stays.** The diagram and the trace are complements, not
+alternatives: the diagram answers *where are we and which cloud is working*, the trace answers
+*exactly what happened, in order, with timestamps and tool names*. The trace remains the
+authoritative record (it is what `GET /jobs/{id}` returns) and is the thing to point at when
+someone asks "prove Databricks called back into AWS". They are wired together — clicking a
+diagram node scrolls and highlights the matching trace rows, and hovering a trace row highlights
+its node — so the picture and the evidence stay in sync.
+
 **Why SVG in React, not a static image**: it must reflect *this* job. One `<FlowDiagram job=…>`
 component, ~200 lines, no new dependency.
 
@@ -80,14 +88,73 @@ Keep Tailwind 4; no component library.
 - **Colour**: AWS amber and Databricks red used *only* for provenance (badges, diagram bands,
   trace rail), so colour always means "which cloud". Neutral greys elsewhere.
 - **Dark mode**: `prefers-color-scheme`, semantic tokens in `globals.css`.
-- **Trace list**: vertical timeline with a cloud-coloured rail, monospace tool names, relative
-  timestamps, collapsed by default once COMPLETED.
+- **Trace list** (kept, restyled — not replaced by the diagram): vertical timeline with a
+  cloud-coloured rail, monospace tool names, relative timestamps, and a row per event exactly as
+  the API returns it. Collapsed by default once COMPLETED, expandable; rows highlight when their
+  diagram node is selected.
 - **Result card**: summary first at readable measure, then key points, then entity chips grouped
   by type, then a compact metadata grid (pages, words, method, model, UC table).
 - **Empty/loading**: skeletons rather than spinners; the diagram renders greyed-out before upload
   so the architecture is visible even with no job.
 - **A11y**: state never colour-only (icon + label), focus rings, live region announcing status
   changes, keyboard-operable diagram nodes.
+
+---
+
+## 4. Deployment
+
+The SPA is a static build served by CloudFront from a private S3 bucket; the API is routed
+through the **same** distribution, so the app is single-origin (no CORS, one hostname to
+resolve — see PLAN.md §0.1 item 7).
+
+### How it ships
+
+```bash
+make build-frontend      # vite build → frontend/dist
+make deploy-aws          # CDK: uploads dist/ to the web bucket + invalidates CloudFront
+```
+
+`make deploy-aws` is the only step that touches AWS. Inside it, the CDK `Web` construct does two
+things that matter for the UI:
+
+1. **`BucketDeployment`** uploads `frontend/dist` to the web bucket and issues a CloudFront
+   invalidation for `/*`, so a redeploy is visible immediately rather than after TTL expiry.
+2. **Writes `config.json` at deploy time** with the live API URL
+   (`{"apiUrl": "https://<distribution>"}`). The bundle never hardcodes an endpoint: `lib/config.ts`
+   fetches `/config.json` at startup and falls back to `VITE_API_URL` for local dev. This is why
+   the same build artefact works against any stage.
+
+### Verifying a UI deploy
+
+```bash
+curl -s https://d3fhr1wqlh1ql9.cloudfront.net/config.json     # apiUrl points at the distribution
+curl -s https://d3fhr1wqlh1ql9.cloudfront.net/health          # API reachable on the same origin
+curl -sI https://d3fhr1wqlh1ql9.cloudfront.net/ | head -3      # 200, and x-cache on a second hit
+```
+
+Then load the page and confirm the flow diagram renders in its idle state with no job selected —
+that exercises config load, bundle integrity and the new component in one look.
+
+### Local development
+
+```bash
+cd frontend && npm run dev      # Vite dev server
+```
+Point it at the deployed API with `VITE_API_URL=https://d3fhr1wqlh1ql9.cloudfront.net` in
+`frontend/.env.local`; there is no local API, and the browser must be able to resolve the
+CloudFront host (the `*.on.aws` Lambda URL is deliberately not used — some resolvers refuse it).
+
+### Rollback
+
+The previous build is not retained in the bucket (deployment prunes), so rollback is
+`git checkout <sha> -- frontend && make build-frontend deploy-aws`. For a demo this is
+acceptable; a production setup would version the prefix and flip an origin path.
+
+### Cost / cache notes
+
+CloudFront serves the SPA from cache; the API behaviours are `CACHING_DISABLED` because they are
+per-request and stream. Invalidations are free up to 1,000 paths/month, and each deploy issues
+one (`/*`).
 
 ---
 
@@ -101,6 +168,7 @@ Keep Tailwind 4; no component library.
 | U4 | Design tokens, dark mode, typography pass in `globals.css` | 0.4 d |
 | U5 | Trace timeline + result card restyle | 0.5 d |
 | U6 | Skeletons, a11y pass, `npm run lint && npm test && npm run build` green | 0.3 d |
+| U7 | Review round, then ship: `make build-frontend && make deploy-aws`, verify per §4 | 0.2 d |
 
 **Constraints** (unchanged): `docs/DEVELOPMENT.md` applies — components ≤ 150 lines, functions
 ≤ 50, no `any`, no business logic in JSX, tests for every pure function. No new runtime
