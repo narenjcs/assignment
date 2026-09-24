@@ -5,10 +5,14 @@ SHELL := /bin/bash
 export
 
 AWS_REGION ?= us-east-1
+# Bundle variables every Databricks deploy needs (warehouse_id has no default in databricks.yml).
+DBX_VARS = --var catalog=$(DATABRICKS_CATALOG) --var schema=$(DATABRICKS_SCHEMA) \
+           --var warehouse_id=$(DATABRICKS_WAREHOUSE_ID) --var llm_endpoint=$(DATABRICKS_LLM_ENDPOINT) \
+           --var aws_secret_scope=docintel
 DATABRICKS_CONFIG_PROFILE ?= docintel
 
 help: ## Show targets
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-22s\033[0m %s\n",$$1,$$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-22s\033[0m %s\n",$$1,$$2}'
 
 prereqs: ## Check CLIs + cloud sessions
 	@bash scripts/prereqs.sh
@@ -30,6 +34,26 @@ deploy-aws: ## CDK deploy (requires `aws login`)
 
 deploy-databricks: ## Bundle deploy + SP/secret scope/grants (requires `databricks auth login --profile docintel`)
 	@bash scripts/deploy-databricks.sh
+
+# ── Per-service deploys ────────────────────────────────────────────────────
+# `make deploy-aws` / `make deploy-databricks` are the safe defaults and always work.
+# These are faster paths for the common "I only changed one thing" case.
+
+deploy-frontend: build-frontend ## SPA only: S3 sync + CloudFront invalidation (~20s, no CloudFormation)
+	@bash scripts/deploy-frontend.sh
+
+deploy-lambdas: ## Lambda code only: rebundle and hotswap, falling back to a normal deploy
+	@cd aws/infra && npx cdk deploy --require-approval never --hotswap-fallback -c modelId=$(BEDROCK_MODEL_ID)
+
+deploy-agents: build-agents ## AgentCore runtimes only: rebuild arm64 zips, then deploy
+	@cd aws/infra && npx cdk deploy --require-approval never --outputs-file ../../cdk-outputs.json -c modelId=$(BEDROCK_MODEL_ID)
+
+deploy-dbx-app: ## Databricks App only: sync source and restart it (skips SP/grants setup)
+	@cd databricks && databricks bundle deploy -t dev -p $(DATABRICKS_CONFIG_PROFILE) --auto-approve $(DBX_VARS)
+	@cd databricks && databricks bundle run mcp_docintel -t dev -p $(DATABRICKS_CONFIG_PROFILE) $(DBX_VARS)
+
+deploy-dbx-job: ## Databricks bundle resources only (job, schema, volume) - no app restart
+	@cd databricks && databricks bundle deploy -t dev -p $(DATABRICKS_CONFIG_PROFILE) --auto-approve $(DBX_VARS)
 
 link: ## Exchange cross-cloud secrets (AWS<->Databricks) and smoke-test both MCP servers
 	@bash scripts/link.sh
@@ -71,4 +95,4 @@ destroy: ## Tear down AWS stack and Databricks bundle
 	@cd aws/infra && npx cdk destroy --force
 	@cd databricks && databricks bundle destroy --auto-approve -p $(DATABRICKS_CONFIG_PROFILE) || true
 
-.PHONY: help venv prereqs samples build build-agents build-frontend deploy-aws deploy-databricks link e2e dev-frontend destroy lint format test check hooks
+.PHONY: help venv prereqs samples build build-agents deploy-frontend deploy-lambdas deploy-agents deploy-dbx-app deploy-dbx-job build-frontend deploy-aws deploy-databricks link e2e dev-frontend destroy lint format test check hooks

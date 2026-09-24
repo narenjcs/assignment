@@ -46,6 +46,19 @@ make link                       # exchanges cross-cloud credentials both ways
 make e2e                        # 4 scenarios: docx/pdf × sync/async
 ```
 
+Iterating on one piece? These skip the parts that did not change:
+
+| Changed | Command | Roughly |
+|---|---|---|
+| React app | `make deploy-frontend` | 20s — S3 sync + CloudFront invalidation, no CloudFormation |
+| Lambda code | `make deploy-lambdas` | 1m — esbuild rebundle, hotswapped in place |
+| Agent code | `make deploy-agents` | 6m — rebuilds arm64 zips, then deploys |
+| Databricks app | `make deploy-dbx-app` | 2m — syncs source and restarts the app |
+| Databricks job/UC | `make deploy-dbx-job` | 1m — bundle resources only |
+
+`make deploy-aws` and `make deploy-databricks` always work and are the right choice when
+infrastructure itself changed; the table above is for code-only edits.
+
 ## Layout
 
 ```

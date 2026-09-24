@@ -110,15 +110,21 @@ resolve — see PLAN.md §0.1 item 7).
 ### How it ships
 
 ```bash
-make build-frontend      # vite build → frontend/dist
-make deploy-aws          # CDK: uploads dist/ to the web bucket + invalidates CloudFront
+make deploy-frontend     # SPA only — build, S3 sync, CloudFront invalidation (~19s, measured)
+make deploy-aws          # full stack — use when infrastructure itself changed
 ```
+
+`make deploy-frontend` deliberately bypasses CloudFormation: it syncs `frontend/dist` to the web
+bucket, rewrites `config.json` with the live API URL, and invalidates `/*`. It touches only
+bucket contents, never infrastructure, which is what makes it safe to run repeatedly while
+iterating on the UI. Reach for `make deploy-aws` when a construct changed.
 
 `make deploy-aws` is the only step that touches AWS. Inside it, the CDK `Web` construct does two
 things that matter for the UI:
 
 1. **`BucketDeployment`** uploads `frontend/dist` to the web bucket and issues a CloudFront
    invalidation for `/*`, so a redeploy is visible immediately rather than after TTL expiry.
+   `scripts/deploy-frontend.sh` performs the same two actions directly for the fast path.
 2. **Writes `config.json` at deploy time** with the live API URL
    (`{"apiUrl": "https://<distribution>"}`). The bundle never hardcodes an endpoint: `lib/config.ts`
    fetches `/config.json` at startup and falls back to `VITE_API_URL` for local dev. This is why
