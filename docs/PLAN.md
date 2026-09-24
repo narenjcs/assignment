@@ -189,6 +189,10 @@ the UI polls.
 
 ### 2.2 Execution flows
 
+> Step-by-step sequence diagrams for all four paths, plus the authentication model, are in
+> [FLOWS.md](FLOWS.md). This section is the summary.
+
+
 **Async (S3-event-driven, the brief's primary path)**
 1. UI → `POST /uploads {fileName, contentType, mode:"async"}` → API creates job (`PENDING_UPLOAD`) → returns presigned PUT for `uploads/async/{jobId}/{fileName}`.
 2. Browser PUTs the file to S3.
