@@ -39,7 +39,12 @@ export function FlowDiagramEdge({ id, edge, reducedMotion }: FlowDiagramEdgeProp
         className={`${STATE_CLASS[edge.state]} ${animate ? 'animate-flow-dash' : ''}`}
       />
       {isBackward && (
-        <text x={430} y="308" textAnchor="middle" className="fill-white/60 text-[8px] font-semibold">
+        <text
+          x={430}
+          y="308"
+          textAnchor="middle"
+          className="fill-white/60 text-[8px] font-semibold"
+        >
           BACKWARD FLOW
         </text>
       )}

@@ -66,9 +66,9 @@ export function ModeCards({ mode, onChange, disabled = false }: ModeCardsProps):
         ))}
       </fieldset>
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        Sync and async are about <strong className="font-semibold">how you watch</strong>, not
-        what runs — both use the same agents. The document type decides the cloud: DOCX stays in
-        AWS, PDF is processed in Databricks.
+        Sync and async are about <strong className="font-semibold">how you watch</strong>, not what
+        runs — both use the same agents. The document type decides the cloud: DOCX stays in AWS, PDF
+        is processed in Databricks.
       </p>
     </div>
   );

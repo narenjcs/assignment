@@ -59,9 +59,7 @@ function onDragOver(
 function zoneClasses(isDragOver: boolean, disabled: boolean): string {
   const base =
     'flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed p-6 text-center';
-  const tone = isDragOver
-    ? 'border-accent bg-accent/5'
-    : 'border-slate-300 dark:border-slate-700';
+  const tone = isDragOver ? 'border-accent bg-accent/5' : 'border-slate-300 dark:border-slate-700';
   const disabledTone = disabled ? 'cursor-not-allowed opacity-50' : '';
   return `${base} ${tone} ${disabledTone}`;
 }

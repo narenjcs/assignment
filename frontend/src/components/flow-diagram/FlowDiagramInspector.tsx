@@ -11,7 +11,10 @@ export interface FlowDiagramInspectorProps {
 
 /** Small readout below the canvas: hovering or focusing a node shows the real events that hit
  * it (tool + relative time), per UI-PLAN §1's "hover/focus shows the real events" behaviour. */
-export function FlowDiagramInspector({ model, inspectedNodeId }: FlowDiagramInspectorProps): ReactElement {
+export function FlowDiagramInspector({
+  model,
+  inspectedNodeId,
+}: FlowDiagramInspectorProps): ReactElement {
   if (!inspectedNodeId) {
     return <p className="text-[11px] text-white/40">Hover or focus a node to see its events.</p>;
   }

@@ -43,20 +43,24 @@ were found only by deploying** — see PLAN.md §0.1.
 
 ## What is left
 
-### 1. UI polish (in progress — the only open work)
+### 1. UI polish (code complete — deploy blocked on AWS login)
+
+All UI code is finished and verified locally: lint, 95 unit tests, `tsc`, the production
+build, and the file-length check all pass. The only thing left is shipping it —
+`make deploy-frontend` failed with `Your session has expired`. Log in to AWS again, re-run
+that one command (~20 s, no CloudFormation), then verify. Nothing else is outstanding.
 
 Specified in **[UI-PLAN.md](UI-PLAN.md)**, tracked as **P10 / U1–U7** in [TASKS.md](TASKS.md).
-A Sonnet subagent is part-way through it.
 
 | Task | State | Notes |
 |---|---|---|
 | U1 flow-model | ✅ done | `frontend/src/lib/flow-model.ts`, pure + tested |
-| U2 flow view | in progress | Dark "console" dialog behind a **View flow** button — spec in UI-PLAN §1 |
-| U3 mode cards | todo | sync/async explained where the choice is made |
-| U4 palette | todo | **kill the yellow**; UI-PLAN §3.1 pins every token |
-| U5 agent trace restyle | todo | trace is *kept*; it is the primary visual inside Job detail |
-| U6 scroll + a11y + skeletons | todo | per-panel scroll regions; `min-h-0` flex trap |
-| U7 review + ship | todo | `make deploy-frontend` (~20 s) then verify |
+| U2 flow view | ✅ done | Dark "console" dialog behind the **View flow** button, UI-PLAN §1 |
+| U3 mode cards | ✅ done | sync/async explained where the choice is made |
+| U4 palette | ✅ done | yellow gone; AWS orange survives only as a large-fill accent, never text |
+| U5 agent trace restyle | ✅ done | cloud-coloured rail; collapses once the job is COMPLETED |
+| U6 scroll + a11y + skeletons | ✅ done | per-panel `scroll-panel` regions, focus trap, Esc-to-close |
+| U7 review + ship | ⛔ **blocked** | code gates green; **`make deploy-frontend` needs a fresh AWS login** |
 
 **How to continue it:**
 ```bash

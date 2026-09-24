@@ -23,7 +23,10 @@ function trapTab(event: KeyboardEvent, container: HTMLElement): void {
 
 /** Dialog a11y plumbing shared by any modal: Esc to close, Tab trapped inside the container,
  * body scroll locked while open, and focus returned to whatever opened it on close. */
-export function useDialogA11y(isOpen: boolean, onClose: () => void): RefObject<HTMLDivElement | null> {
+export function useDialogA11y(
+  isOpen: boolean,
+  onClose: () => void,
+): RefObject<HTMLDivElement | null> {
   const containerRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<Element | null>(null);
 
