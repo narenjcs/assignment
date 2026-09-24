@@ -8,7 +8,14 @@ Three deliverables, in priority order.
 
 ---
 
-## 1. Live agent-flow diagram (the centrepiece)
+## 1. Live agent-flow diagram — **DEFERRED** (2026-09-24)
+
+> Deferred to a later round on Naren's call. `lib/flow-model.ts` (the pure events→node-state
+> mapping) is built and tested and stays in the tree as the foundation; nothing renders it yet.
+> Until then **the Agent trace is the primary visual in Job detail** — see §2.1 below. The rest of
+> this section is the spec for when we pick it up.
+
+### Original spec
 
 An inline SVG of the pipeline that **animates as the job runs**, driven by the job's existing
 `events[]` trace and, in sync mode, by the live SSE stream. No new backend work: every event
@@ -92,10 +99,11 @@ Keep Tailwind 4; no component library.
   queued, indigo/violet for in-flight, emerald for done, red reserved for failure — so a reader
   can never confuse "which cloud" with "what state". Neutral greys elsewhere.
 - **Dark mode**: `prefers-color-scheme`, semantic tokens in `globals.css`.
-- **Trace list** (kept, restyled — not replaced by the diagram): vertical timeline with a
-  cloud-coloured rail, monospace tool names, relative timestamps, and a row per event exactly as
-  the API returns it. Collapsed by default once COMPLETED, expandable; rows highlight when their
-  diagram node is selected.
+- **Trace list** — now the primary visual in Job detail (the diagram is deferred), so it has to
+  carry the story on its own: vertical timeline with a cloud-coloured rail so the AWS→Databricks
+  →AWS hand-offs are obvious at a glance, monospace tool names, relative timestamps, and a row
+  per event exactly as the API returns it. Grouped by cloud, collapsed once COMPLETED but
+  expandable. Job detail is: status stepper → result card → agent trace.
 - **Result card**: summary first at readable measure, then key points, then entity chips grouped
   by type, then a compact metadata grid (pages, words, method, model, UC table).
 - **Empty/loading**: skeletons rather than spinners; the diagram renders greyed-out before upload

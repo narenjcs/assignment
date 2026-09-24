@@ -27,7 +27,7 @@ function noteFor(event: SseEvent): ReactElement | null {
   if (event.type === 'status') return statusNote(event.status);
   if (event.type === 'tool') return <Badge variant={event.source}>{event.name}</Badge>;
   if (event.type === 'error')
-    return <span className="text-red-600 dark:text-red-400">{event.error.message}</span>;
+    return <span className="text-state-failed">{event.error.message}</span>;
   return null;
 }
 

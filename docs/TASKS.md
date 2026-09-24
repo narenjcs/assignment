@@ -87,10 +87,10 @@ All 41 build tasks complete. 426 tests green across six workspaces (lambdas 174,
 
 ## P10 UI polish (see docs/UI-PLAN.md)
 - [~] U1 `lib/flow-model.ts` — pure `events[] → node state` mapping + tests (DOCX skips the Databricks band, PDF sync, PDF async, FAILED, idle, gateway-tool callback edge)
-- [~] U2 `components/FlowDiagram.tsx` — hand-written inline SVG, two cloud bands, node states (pending/active/done/failed/skipped), the Databricks→AWS callback edge, tooltips, `prefers-reduced-motion`, keyboard + screen-reader support, idle render before any upload
+- [ ] U2 **DEFERRED** (Naren, 2026-09-24) `components/FlowDiagram.tsx` — hand-written inline SVG, two cloud bands, node states (pending/active/done/failed/skipped), the Databricks→AWS callback edge, tooltips, `prefers-reduced-motion`, keyboard + screen-reader support, idle render before any upload
 - [~] U3 Mode cards + persistent info note: sync vs async is *how you watch*; document type decides the cloud
 - [~] U4 Design tokens, dark mode, typography in `globals.css`; cloud colour reserved for provenance
-- [~] U5 **Agent trace kept and restyled** (not replaced): timeline with cloud-coloured rail, monospace tool names, relative times; two-way highlight with the diagram
+- [~] U5 **Agent trace — now the primary visual in Job detail** (diagram deferred): timeline with cloud-coloured rail, monospace tool names, relative times; two-way highlight with the diagram
 - [~] U6 Skeletons, a11y pass, `npm run lint && npm test && npm run build` green
 - [ ] U7 Fable review round, then ship: `make build-frontend && make deploy-aws` (CDK uploads `frontend/dist` to the web bucket, rewrites `config.json` with the live API URL, invalidates CloudFront `/*`), then verify per UI-PLAN §4: `config.json`, `/health` on the same origin, and the diagram rendering idle with no job
 

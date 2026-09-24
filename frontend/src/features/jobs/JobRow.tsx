@@ -18,9 +18,9 @@ export function JobRow({ job, isSelected, onSelect }: JobRowProps): ReactElement
         type="button"
         onClick={() => onSelect(job.jobId)}
         aria-current={isSelected ? 'true' : undefined}
-        className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm ${
+        className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 ${
           isSelected
-            ? 'bg-brand-aws/10 ring-1 ring-brand-aws'
+            ? 'bg-accent/10 ring-1 ring-accent'
             : 'hover:bg-slate-100 dark:hover:bg-slate-800'
         }`}
       >

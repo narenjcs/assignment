@@ -7,10 +7,10 @@ export interface MessageBubbleProps {
 }
 
 const ROLE_CLASSES: Record<ChatMessage['role'], string> = {
-  user: 'ml-auto bg-brand-aws text-white',
+  user: 'ml-auto bg-accent text-white',
   assistant: 'mr-auto bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
   note: 'mr-auto bg-transparent text-slate-400 italic',
-  error: 'mr-auto bg-red-500/10 text-red-600 dark:text-red-400',
+  error: 'mr-auto bg-state-failed/10 text-state-failed',
 };
 
 /** One chat bubble: user turn, streamed assistant reply, or an inline status/tool note. */

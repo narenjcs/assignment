@@ -3,16 +3,18 @@ import { useMemo, type ReactElement } from 'react';
 import { Card } from '../../components/Card';
 import { Dropzone } from '../../components/Dropzone';
 import { Spinner } from '../../components/Spinner';
-import type { Job, JobMode } from '../../types/job';
+import type { Job } from '../../types/job';
+import type { SseEvent } from '../../types/sse';
+import { ModeCards } from './ModeCards';
 import { useUpload, type UploadPhase, type UseUploadOptions } from './useUpload';
 import { UploadStreamPreview } from './UploadStreamPreview';
 
 export interface UploadPanelProps {
   onJobCreated?: (jobId: string) => void;
   onResync?: (job: Job) => void;
+  onStreamEvent?: (event: SseEvent) => void;
 }
 
-const MODES: JobMode[] = ['sync', 'async'];
 const BUSY_PHASES = new Set(['creating', 'uploading', 'streaming']);
 
 interface UploadActionProps {
@@ -49,7 +51,7 @@ function UploadAction({
       type="button"
       onClick={onSubmit}
       disabled={!file || isBusy}
-      className="mt-3 w-full rounded-md bg-brand-aws px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      className="mt-3 w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {isBusy ? <Spinner label={`${phase}…`} /> : 'Upload & process'}
     </button>
@@ -57,10 +59,14 @@ function UploadAction({
 }
 
 /** Upload form: mode toggle, dropzone, submit; shows the live stream inline for sync mode. */
-export function UploadPanel({ onJobCreated, onResync }: UploadPanelProps): ReactElement {
+export function UploadPanel({
+  onJobCreated,
+  onResync,
+  onStreamEvent,
+}: UploadPanelProps): ReactElement {
   const options: UseUploadOptions = useMemo(
-    () => ({ onJobCreated, onResync }),
-    [onJobCreated, onResync],
+    () => ({ onJobCreated, onResync, onStreamEvent }),
+    [onJobCreated, onResync, onStreamEvent],
   );
   const { mode, setMode, file, setFile, phase, error, streamEvents, submit, reset } =
     useUpload(options);
@@ -72,21 +78,9 @@ export function UploadPanel({ onJobCreated, onResync }: UploadPanelProps): React
 
   return (
     <Card title="Upload a document">
-      <fieldset className="mb-3 flex gap-3 text-sm" disabled={isBusy || isFinished}>
-        <legend className="sr-only">Processing mode</legend>
-        {MODES.map((option) => (
-          <label key={option} className="inline-flex items-center gap-1.5">
-            <input
-              type="radio"
-              name="mode"
-              value={option}
-              checked={mode === option}
-              onChange={() => setMode(option)}
-            />
-            <span className="capitalize">{option}</span>
-          </label>
-        ))}
-      </fieldset>
+      <div className="mb-3">
+        <ModeCards mode={mode} onChange={setMode} disabled={isBusy || isFinished} />
+      </div>
 
       <Dropzone file={file} onFileSelected={setFile} disabled={isBusy || isFinished} />
 
@@ -100,7 +94,7 @@ export function UploadPanel({ onJobCreated, onResync }: UploadPanelProps): React
       />
 
       {error && (
-        <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">
+        <p role="alert" className="mt-2 text-xs text-state-failed">
           {error}
         </p>
       )}

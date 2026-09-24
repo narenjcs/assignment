@@ -28,11 +28,11 @@ type StepState = 'done' | 'current' | 'upcoming' | 'failed';
 function stateClasses(state: StepState): string {
   switch (state) {
     case 'done':
-      return 'border-emerald-500 bg-emerald-500 text-white';
+      return 'border-state-done bg-state-done text-white';
     case 'current':
-      return 'border-brand-aws bg-brand-aws text-white';
+      return 'border-accent bg-accent text-white';
     case 'failed':
-      return 'border-red-500 bg-red-500 text-white';
+      return 'border-state-failed bg-state-failed text-white';
     default:
       return 'border-slate-300 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-900';
   }

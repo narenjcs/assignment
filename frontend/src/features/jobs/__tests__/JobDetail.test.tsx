@@ -39,7 +39,8 @@ describe('JobDetail', () => {
 
     expect(screen.getByText('A concise summary of the document.')).toBeInTheDocument();
     expect(screen.getByText('Point one')).toBeInTheDocument();
-    expect(screen.getByText('Acme Corp (ORG)')).toBeInTheDocument();
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    expect(screen.getByText('ORG')).toBeInTheDocument();
     expect(screen.getByText('finance')).toBeInTheDocument();
     expect(screen.getByText('neutral')).toBeInTheDocument();
   });

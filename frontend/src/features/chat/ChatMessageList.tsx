@@ -16,7 +16,7 @@ export function ChatMessageList({ messages }: ChatMessageListProps): ReactElemen
     );
   }
   return (
-    <div className="flex-1 space-y-2 overflow-y-auto" aria-live="polite">
+    <div className="scroll-panel min-h-0 flex-1 space-y-2" aria-live="polite">
       {messages.map((message) => (
         <MessageBubble key={message.id} message={message} />
       ))}

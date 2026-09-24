@@ -27,10 +27,10 @@ export function ChatPanel({ job }: ChatPanelProps): ReactElement {
       )}
 
       {isReady && (
-        <div className="flex h-80 flex-col gap-3">
+        <div className="flex h-80 min-h-0 flex-col gap-3">
           <ChatMessageList messages={messages} />
           {error && (
-            <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+            <p role="alert" className="shrink-0 text-xs text-state-failed">
               {error}
             </p>
           )}

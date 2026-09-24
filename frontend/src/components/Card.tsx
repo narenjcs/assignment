@@ -10,10 +10,10 @@ export interface CardProps {
 export function Card({ title, children, className = '' }: CardProps): ReactElement {
   return (
     <section
-      className={`rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}
+      className={`rounded-lg border border-black/8 bg-surface-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_1px_1px_rgba(0,0,0,0.03)] dark:border-white/8 ${className}`}
     >
       {title !== undefined && (
-        <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink/80">{title}</h2>
       )}
       {children}
     </section>

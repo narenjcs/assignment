@@ -1,14 +1,87 @@
 @import 'tailwindcss';
 
-/* Small DocIntel brand palette (Tailwind 4 CSS-first theme, see
-   https://tailwindcss.com/docs/theme). Each token below generates the usual
-   bg-/text-/border-brand-* utilities used by Badge and the app header. */
+/* DocIntel palette — docs/UI-PLAN.md §3.1 "Palette (the one to implement)". Three colour jobs,
+   never mixed:
+     - PROVENANCE (warm): which cloud did this — AWS deep orange, Databricks red. Badges,
+       diagram bands, trace rail. Never used for interaction/focus/state.
+     - STATE (cool): what is happening — queued/in-flight/done/failed. Badges, stepper, diagram
+       node fills. Never used for provenance.
+     - Indigo `--color-accent` is the ONE accent: active state, focus rings, primary buttons,
+       the live edge in the flow diagram. Nowhere else.
+   `--color-brand-aws` / `--color-brand-databricks` are the AA-safe shades for TEXT/BORDERS
+   (`#ff9900` is only ~2.2:1 on white and fails AA for text). The `-accent` variants are the
+   real brand colours (`#ff9900`, `#ff3621`) for large fills only, never text. */
 @theme {
-  --color-brand-aws: #ff9900;
-  --color-brand-databricks: #ff3621;
+  --color-brand-aws: #c2410c;
+  --color-brand-aws-accent: #ff9900;
+  --color-brand-databricks: #b91c1c;
+  --color-brand-databricks-accent: #ff3621;
   --color-brand-orchestrator: #475569;
+
+  --color-state-queued: #0284c7;
+  --color-state-inflight: #6366f1;
+  --color-state-done: #059669;
+  --color-state-failed: #e11d48;
+  --color-accent: #6366f1;
+
+  --color-surface-page: #fafaf9;
+  --color-surface-card: #ffffff;
+  --color-ink: #0c0a09;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark is the primary demo path (§3.1) — near-black surfaces, lightened provenance shades
+       so text/borders stay AA-safe against them. */
+    --color-brand-aws: #fb923c;
+    --color-brand-databricks: #f87171;
+
+    --color-surface-page: #0a0a0b;
+    --color-surface-card: #141416;
+    --color-ink: #fafaf9;
+  }
+}
+
+/* Independently-scrolling panels (jobs list / job detail / chat): a stable gutter stops the
+   scrollbar's appearance from shifting layout. */
+@utility scroll-panel {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+/* Marching-ants animation for the FlowDiagram's active edge — the only thing that loops.
+   Components only apply this when `prefers-reduced-motion` is off. */
+@utility animate-flow-dash {
+  stroke-dasharray: 6 4;
+  animation: flow-dash 1s linear infinite;
+}
+
+* {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms;
+  }
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  @apply bg-surface-page text-ink;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+h1,
+h2,
+h3 {
+  @apply tracking-tight;
 }

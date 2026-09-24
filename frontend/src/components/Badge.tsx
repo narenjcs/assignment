@@ -17,13 +17,15 @@ const VARIANT_CLASSES: Record<'aws' | 'databricks' | 'orchestrator', string> = {
   orchestrator: 'bg-brand-orchestrator/10 text-brand-orchestrator border-brand-orchestrator/40',
 };
 
+// Job/step STATE colours (queued/in-flight/done/failed) — a cool hue family, deliberately
+// distinct from the warm AWS/Databricks provenance colours above (docs/UI-PLAN.md §3.1).
 const STATUS_CLASSES: Record<JobStatus, string> = {
   PENDING_UPLOAD: 'bg-slate-500/10 text-slate-600 border-slate-500/30 dark:text-slate-300',
-  UPLOADED: 'bg-sky-500/10 text-sky-600 border-sky-500/30 dark:text-sky-300',
-  QUEUED: 'bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-300',
-  PROCESSING: 'bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-300',
-  COMPLETED: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:text-emerald-300',
-  FAILED: 'bg-red-500/10 text-red-600 border-red-500/30 dark:text-red-300',
+  UPLOADED: 'bg-state-queued/10 text-state-queued border-state-queued/30',
+  QUEUED: 'bg-state-queued/10 text-state-queued border-state-queued/30',
+  PROCESSING: 'bg-accent/10 text-accent border-accent/30',
+  COMPLETED: 'bg-state-done/10 text-state-done border-state-done/30',
+  FAILED: 'bg-state-failed/10 text-state-failed border-state-failed/30',
 };
 
 function resolveClasses(variant: BadgeVariant, status?: JobStatus): string {

@@ -60,7 +60,7 @@ function zoneClasses(isDragOver: boolean, disabled: boolean): string {
   const base =
     'flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed p-6 text-center';
   const tone = isDragOver
-    ? 'border-brand-aws bg-brand-aws/5'
+    ? 'border-accent bg-accent/5'
     : 'border-slate-300 dark:border-slate-700';
   const disabledTone = disabled ? 'cursor-not-allowed opacity-50' : '';
   return `${base} ${tone} ${disabledTone}`;
@@ -111,7 +111,7 @@ export function Dropzone({ file, onFileSelected, disabled = false }: DropzonePro
         />
       </div>
       {error && (
-        <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
+        <p role="alert" className="mt-1 text-xs text-state-failed">
           {error}
         </p>
       )}

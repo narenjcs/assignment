@@ -30,13 +30,13 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps): ReactElem
         onChange={(event) => setDraft(event.target.value)}
         disabled={disabled}
         placeholder="Ask about this document…"
-        className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+        className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
       />
       <button
         type="submit"
         disabled={disabled || !draft.trim()}
         aria-label="Send message"
-        className="rounded-md bg-brand-aws px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 disabled:opacity-50"
       >
         Send
       </button>
