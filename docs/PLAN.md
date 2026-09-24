@@ -86,37 +86,77 @@ results land in DynamoDB, `results/{jobId}/result.json` in S3, and the Unity Cat
 
 ## 2. Target architecture
 
+```mermaid
+flowchart TB
+    browser["🖥️ Browser — React SPA<br/><i>upload · poll · SSE stream</i>"]
+
+    subgraph aws["☁️ AWS — us-east-1"]
+        direction TB
+        cf["CloudFront + S3<br/><i>SPA and API, one origin</i>"]
+        api["Lambda <b>api</b><br/>Function URL, RESPONSE_STREAM<br/><i>/uploads /jobs /process /chat</i>"]
+        s3up[("S3 docintel-uploads<br/><i>documents + results/</i>")]
+        trig["Lambda <b>s3-trigger</b><br/><i>ObjectCreated → queue</i>"]
+        ddb[("DynamoDB docintel-jobs<br/><i>status · trace · result</i>")]
+        orch["🤖 <b>Orchestrator</b><br/>AgentCore Runtime<br/><i>Strands · gpt-oss-120b</i>"]
+        docx["🤖 <b>DOCX Agent</b><br/>AgentCore Runtime<br/><i>extract · enrich</i>"]
+        gw{{"🔌 <b>AgentCore Gateway</b><br/>MCP server · Cognito JWT<br/><i>7 tools, jobs___*</i>"}}
+        mcpfn["Lambda <b>mcp-tools</b><br/><i>Gateway target</i>"]
+    end
+
+    subgraph dbx["🧱 Databricks on AWS — workspace docintel"]
+        direction TB
+        app{{"🔌 <b>App mcp-docintel</b><br/>MCP server · /mcp<br/><i>8 tools</i>"}}
+        pdf["🤖 <b>PDF Agent</b><br/><i>ingest → extract → enrich → persist</i>"]
+        job["Job docintel_pdf_agent<br/><i>serverless · async mode</i>"]
+        vol[("UC Volume<br/>docs.inbox")]
+        tbl[("UC Delta table<br/>docs.document_results")]
+    end
+
+    browser -->|"presigned PUT"| s3up
+    browser <-->|"REST + SSE"| cf
+    cf --> api
+    s3up -->|"event"| trig
+    trig -->|"InvokeAgentRuntime · IAM"| orch
+    api -->|"sync: stream"| orch
+    api <--> ddb
+
+    orch -->|"DOCX"| docx
+    orch -.->|"MCP"| gw
+    docx -.->|"MCP"| gw
+    gw --> mcpfn
+    mcpfn <--> ddb
+    mcpfn <--> s3up
+
+    orch ==>|"PDF · MCP over HTTPS<br/>OAuth M2M"| app
+    app --> pdf
+    app -->|"async"| job
+    job --> pdf
+    pdf --> vol
+    pdf --> tbl
+    pdf -.->|"MCP · Cognito JWT<br/><i>token supplied by AWS</i>"| gw
+
+    classDef awsBox fill:#fff4e6,stroke:#d97706,color:#1f2937
+    classDef dbxBox fill:#fee2e2,stroke:#dc2626,color:#1f2937
+    classDef store fill:#eef2ff,stroke:#4f46e5,color:#1f2937
+    classDef agent fill:#ecfdf5,stroke:#059669,color:#1f2937
+    classDef mcp fill:#f5f3ff,stroke:#7c3aed,color:#1f2937
+    class cf,api,trig,mcpfn awsBox
+    class job dbxBox
+    class s3up,ddb,vol,tbl store
+    class orch,docx,pdf agent
+    class gw,app mcp
 ```
-                         ┌──────────────────────────── AWS (us-east-1) ────────────────────────────┐
-                         │                                                                               │
- Browser (React SPA)     │  CloudFront + S3 (web)                                                        │
-   │  upload (presigned)  │        │                                                                      │
-   ├──────────────────────┼──►  S3 docintel-uploads ──(ObjectCreated)──► Lambda s3-trigger ──┐            │
-   │  REST + SSE          │                                                                  │ invoke     │
-   └──────────────────────┼──►  Lambda api (Function URL, RESPONSE_STREAM) ──────────────────┤ (IAM)      │
-                         │        │  jobs / uploads / chat                                   ▼            │
-                         │        └──► DynamoDB docintel-jobs            AgentCore Runtime: ORCHESTRATOR   │
-                         │                                                 (Strands + gpt-oss-120b on Bedrock)  │
-                         │                                                    │  tools via MCP            │
-                         │                 ┌──────────────────────────────────┼──────────────┐            │
-                         │                 ▼                                  ▼              ▼ (IAM)      │
-                         │   AgentCore GATEWAY (MCP server, Cognito JWT)   Databricks MCP   AgentCore     │
-                         │      └─ Lambda mcp-tools: get_job, update_job,   (over HTTPS,     Runtime:     │
-                         │         save_result, extract_docx_text,          OAuth M2M)       DOCX AGENT   │
-                         │         get_download_url, ...                                     (Strands)    │
-                         └───────────────────────────────▲──────────────────────────────────────┬────────┘
-                                                         │ Cognito client-credentials JWT       │ MCP tools
-                                                         │ (Databricks agent → AWS MCP)         ▼
-                         ┌───────────────────────────── Databricks (workspace: profile `docintel`) ───────┐
-                         │  Databricks App `mcp-docintel`  (FastAPI + MCP streamable-HTTP at /mcp)         │
-                         │    tools: ingest_pdf, extract_pdf_text (pypdf | ai_parse_document OCR),         │
-                         │           enrich_document (FMAPI), persist_document_result, get_document_result,│
-                         │           run_pdf_agent(mode=sync|async), get_pdf_run_status                    │
-                         │    PDF AGENT (tool-calling loop on FMAPI, in-process for sync)                   │
-                         │  Databricks Job `docintel_pdf_agent` (serverless) – same agent, async mode      │
-                         │  Unity Catalog: docintel.docs.inbox (Volume) · docintel.docs.document_results   │
-                         └───────────────────────────────────────────────────────────────────────────────┘
-```
+
+**Reading the diagram.** Solid arrows are data and control flow; dotted arrows are MCP tool
+calls; the thick arrow is the cross-cloud hop. The two hexagons are the MCP servers the brief
+asks for — one per cloud — and both are called from agents on the *other* cloud, which is what
+makes this genuinely cross-cloud rather than two pipelines side by side.
+
+**The two document paths.** A DOCX job never leaves AWS: orchestrator → DOCX agent → Gateway
+tools → DynamoDB/S3. A PDF job crosses to Databricks, is processed there against Unity Catalog,
+and the Databricks agent calls *back* into the AWS Gateway to report progress and save its
+result. Sync mode streams tokens to the browser throughout; async mode returns immediately and
+the UI polls.
 
 ### 2.1 Component inventory
 
@@ -302,10 +342,44 @@ All tools return `{ok: true, data} | {ok: false, error: {code, message}}`. Pinne
 | Cross-cloud latency / cold starts (serverless job ≈ 1–2 min) | Sync PDF path runs in-app; async path expected to be slower and shown as such in UI |
 | Cost | Serverless everywhere; `make destroy` removes all AWS resources and bundle |
 
-## 8. Prerequisites checklist (owner: Naren)
-- [x] `! aws login` (profile `default`, account <AWS_ACCOUNT_ID>) — done 2026-09-23
-- [x] Region decision: **us-east-1** (existing buckets + Terraform state live there; AgentCore control plane reachable). ap-southeast-2 is a fallback via `global.` inference profiles
-- [ ] `! databricks auth login --host https://<workspace> --profile docintel`
-- [x] **Bedrock**: no form needed — agents run on `openai.gpt-oss-120b-1:0` (verified tool calling + JSON output from this account in us-east-1). Optional later: submit the Anthropic use-case form to unlock Claude Sonnet 4.5 and switch via `-c modelId=`
-- [ ] Databricks workspace: UC + serverless + Apps enabled; a serverless SQL warehouse; note its ID
-- [ ] Confirm the Databricks FMAPI endpoint name to use (default `databricks-gpt-oss-120b`, fallback `databricks-meta-llama-3-3-70b-instruct`)
+## 8. Prerequisites checklist
+
+All satisfied as of 2026-09-24 — both paths run end to end. Kept as the setup list for a fresh
+environment; `make prereqs` checks the tooling and both cloud sessions in one command.
+
+### Local tooling
+- [x] `aws` CLI, `databricks` CLI, `node`/`npm`, `uv`, `jq`
+- [x] **`terraform`** on `PATH` — Databricks Asset Bundles drive it internally and the Databricks
+  CLI's own download fails on HashiCorp's expired signing key. Any recent version works;
+  `scripts/deploy-databricks.sh` exports `DATABRICKS_TF_VERSION` to match what it finds.
+  Install: `curl -sL -o /tmp/tf.zip https://releases.hashicorp.com/terraform/1.5.5/terraform_1.5.5_linux_amd64.zip && unzip -o /tmp/tf.zip -d "$HOME/.local/bin"`
+- [x] `make venv` (Python 3.12 toolchain) and `npm install` (TypeScript workspaces)
+
+### AWS
+- [x] `aws login` — account `<AWS_ACCOUNT_ID>`, region **us-east-1** (chosen because the existing
+  buckets and Terraform state live there; `ap-southeast-2` remains a fallback via `global.`
+  inference profiles)
+- [x] `cdk bootstrap aws://<AWS_ACCOUNT_ID>/us-east-1` (one-time)
+- [x] **Bedrock model access** — agents run on `openai.gpt-oss-120b-1:0`, which needs no access
+  form; verified with tool calling and JSON output from this account. `scripts/pick-model.sh`
+  re-checks before a deploy. *(Claude models in this account are gated behind the one-time
+  Anthropic use-case form; submitting it would allow `-c modelId=us.anthropic.claude-sonnet-4-5-…`.)*
+
+### Databricks (on AWS)
+- [x] Workspace `https://dbc-34766815-3348.cloud.databricks.com`
+- [x] `databricks auth login --host <workspace> --profile docintel` (interactive; profiles `dev`
+  and `prod` belong to another project and must not be used)
+- [x] Unity Catalog, serverless compute, and Databricks Apps enabled
+- [x] Serverless SQL warehouse — `63ea130ae37ddbb9` (`DATABRICKS_WAREHOUSE_ID`)
+- [x] Foundation Model endpoint — `databricks-gpt-oss-120b` (fallback
+  `databricks-meta-llama-3-3-70b-instruct`)
+- [x] Catalog — this is a **Default Storage** workspace, so a new catalog cannot be created
+  without a MANAGED LOCATION; the built-in `workspace` catalog is used with our own `docs` schema
+
+### Known environment constraint (no action needed, handled in code)
+- Databricks serverless resolves DNS through an allowlist that **excludes the Cognito token
+  endpoint**, so the Databricks side cannot mint its own AWS token. AWS supplies one: via the
+  request body for sync, via the `docintel` secret scope for the async job. If
+  `*.amazoncognito.com` is ever allowed in the workspace network policy, the Databricks side can
+  mint its own and that code path already exists. See §0.1.
+
