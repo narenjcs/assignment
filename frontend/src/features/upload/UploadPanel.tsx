@@ -4,6 +4,7 @@ import { Card } from '../../components/Card';
 import { Dropzone } from '../../components/Dropzone';
 import { Spinner } from '../../components/Spinner';
 import type { Job } from '../../types/job';
+import type { SseEvent } from '../../types/sse';
 import { ModeCards } from './ModeCards';
 import { useUpload, type UploadPhase, type UseUploadOptions } from './useUpload';
 import { UploadStreamPreview } from './UploadStreamPreview';
@@ -11,6 +12,7 @@ import { UploadStreamPreview } from './UploadStreamPreview';
 export interface UploadPanelProps {
   onJobCreated?: (jobId: string) => void;
   onResync?: (job: Job) => void;
+  onStreamEvent?: (event: SseEvent) => void;
 }
 
 const BUSY_PHASES = new Set(['creating', 'uploading', 'streaming']);
@@ -57,10 +59,14 @@ function UploadAction({
 }
 
 /** Upload form: mode toggle, dropzone, submit; shows the live stream inline for sync mode. */
-export function UploadPanel({ onJobCreated, onResync }: UploadPanelProps): ReactElement {
+export function UploadPanel({
+  onJobCreated,
+  onResync,
+  onStreamEvent,
+}: UploadPanelProps): ReactElement {
   const options: UseUploadOptions = useMemo(
-    () => ({ onJobCreated, onResync }),
-    [onJobCreated, onResync],
+    () => ({ onJobCreated, onResync, onStreamEvent }),
+    [onJobCreated, onResync, onStreamEvent],
   );
   const { mode, setMode, file, setFile, phase, error, streamEvents, submit, reset } =
     useUpload(options);

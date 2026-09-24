@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useMemo, useState, type ReactElement } from 'react';
 
 import { ChatPanel } from '../features/chat/ChatPanel';
 import { JobDetail } from '../features/jobs/JobDetail';
@@ -6,6 +6,7 @@ import { JobsList } from '../features/jobs/JobsList';
 import { useJobPolling } from '../features/jobs/useJobPolling';
 import { UploadPanel } from '../features/upload/UploadPanel';
 import { AppHeader } from './AppHeader';
+import { useLiveEvents } from './useLiveEvents';
 
 /**
  * Two-column DocIntel shell: upload + jobs on the left, detail + chat on the right. Each panel
@@ -20,11 +21,16 @@ export function App(): ReactElement {
     () => jobs.find((job) => job.jobId === selectedJobId) ?? null,
     [jobs, selectedJobId],
   );
+  const { activeLiveEvents, onJobCreated, onStreamEvent } = useLiveEvents(selectedJob);
 
-  const handleJobCreated = (jobId: string): void => {
-    setSelectedJobId(jobId);
-    void refresh();
-  };
+  const handleJobCreated = useCallback(
+    (jobId: string) => {
+      setSelectedJobId(jobId);
+      onJobCreated(jobId);
+      void refresh();
+    },
+    [refresh, onJobCreated],
+  );
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -33,7 +39,11 @@ export function App(): ReactElement {
       <main className="grid min-h-0 flex-1 grid-rows-2 gap-4 overflow-hidden px-4 pb-4 lg:grid-cols-2 lg:grid-rows-1 lg:gap-6">
         <div className="flex min-h-0 flex-col gap-4">
           <div className="shrink-0">
-            <UploadPanel onJobCreated={handleJobCreated} onResync={() => void refresh()} />
+            <UploadPanel
+              onJobCreated={handleJobCreated}
+              onResync={() => void refresh()}
+              onStreamEvent={onStreamEvent}
+            />
           </div>
           <div className="min-h-0 flex-1">
             <JobsList
@@ -47,7 +57,7 @@ export function App(): ReactElement {
         </div>
         <div className="flex min-h-0 flex-col gap-4">
           <div className="min-h-0 flex-1">
-            <JobDetail job={selectedJob} />
+            <JobDetail job={selectedJob} liveEvents={activeLiveEvents} />
           </div>
           <div className="shrink-0">
             <ChatPanel job={selectedJob} />

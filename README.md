@@ -8,6 +8,7 @@ DynamoDB and a Unity Catalog table, and stream back to the browser. Sync and asy
 
 | Doc | Purpose |
 |---|---|
+| **[docs/STATUS.md](docs/STATUS.md)** | **Start here** — what is done, what is left, how to continue |
 | [docs/FLOWS.md](docs/FLOWS.md) | How each of the four paths runs (sync/async × DOCX/PDF) and how every hop authenticates — sequence diagrams |
 | [docs/PLAN.md](docs/PLAN.md) | Requirements mapping, architecture, contracts, AWS + Databricks deployment plan |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, milestones, dependencies |
