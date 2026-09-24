@@ -53,8 +53,12 @@ results land in DynamoDB, `results/{jobId}/result.json` in S3, and the Unity Cat
 6. **Gateway tools are prefixed** `jobs___<tool>`; both clouds' clients add the prefix.
 7. **The API is served through CloudFront**, not its Lambda Function URL: some upstream DNS
    resolvers refuse `*.lambda-url.*.on.aws`, and one origin also removes CORS entirely.
-8. **Terraform** is pinned locally (1.5.5) for the bundle; the CLI's own download fails on
-   HashiCorp's expired signing key.
+8. **Terraform is a prerequisite for the Databricks half.** Asset Bundles drive Terraform
+   internally and the CLI's own download fails on HashiCorp's expired signing key, so a local
+   binary is required (`make prereqs` checks for it; README has the install command). The CLI
+   also refuses a version other than the one it pins, so `scripts/deploy-databricks.sh` reads
+   the installed version and exports `DATABRICKS_TF_VERSION` to match — any recent Terraform
+   works, no need to match the pin by hand.
 
 ---
 

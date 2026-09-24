@@ -164,3 +164,16 @@ databricks api post /api/2.0/sql/statements -p docintel --json '{
   "wait_timeout":"50s"}'
 ```
 
+## Terraform prerequisite
+
+**Terraform is required for the Databricks half.** Databricks Asset Bundles drive Terraform
+internally, and the Databricks CLI's own download of it fails on HashiCorp's expired signing key,
+so install a local binary once (any recent version works — the deploy script declares whichever
+one it finds):
+
+```bash
+curl -sL -o /tmp/tf.zip https://releases.hashicorp.com/terraform/1.5.5/terraform_1.5.5_linux_amd64.zip
+unzip -o /tmp/tf.zip -d "$HOME/.local/bin" && chmod +x "$HOME/.local/bin/terraform"
+```
+
+`make prereqs` checks for it along with the other tools and cloud sessions.

@@ -155,7 +155,22 @@ echo "==> Running bundle deploy"
 if [[ -z "${DATABRICKS_TF_EXEC_PATH:-}" ]] && command -v terraform >/dev/null 2>&1; then
   DATABRICKS_TF_EXEC_PATH="$(command -v terraform)"
   export DATABRICKS_TF_EXEC_PATH
-  echo "==> Using local terraform at ${DATABRICKS_TF_EXEC_PATH}"
+  # The CLI pins an expected Terraform version and refuses anything else ("... is 1.14.5 but
+  # expected version is 1.5.5. Set DATABRICKS_TF_VERSION to 1.14.5 to continue"), so declare
+  # whichever version is actually installed rather than forcing the operator to match the pin.
+  if [[ -z "${DATABRICKS_TF_VERSION:-}" ]]; then
+    DATABRICKS_TF_VERSION="$("${DATABRICKS_TF_EXEC_PATH}" version -json 2>/dev/null \
+      | jval 'd["terraform_version"]' 2>/dev/null || true)"
+    [[ -n "${DATABRICKS_TF_VERSION}" ]] && export DATABRICKS_TF_VERSION
+  fi
+  echo "==> Using local terraform ${DATABRICKS_TF_VERSION:-(unknown version)} at ${DATABRICKS_TF_EXEC_PATH}"
+elif [[ -z "${DATABRICKS_TF_EXEC_PATH:-}" ]]; then
+  echo "!! terraform not found on PATH." >&2
+  echo "   Databricks Asset Bundles drive Terraform internally and this CLI's own download" >&2
+  echo "   fails on HashiCorp's expired signing key, so a local binary is required:" >&2
+  echo "     curl -sL -o /tmp/tf.zip https://releases.hashicorp.com/terraform/1.5.5/terraform_1.5.5_linux_amd64.zip" >&2
+  echo "     unzip -o /tmp/tf.zip -d \"\$HOME/.local/bin\" && chmod +x \"\$HOME/.local/bin/terraform\"" >&2
+  exit 1
 fi
 
 # Bundle variables are declared in databricks.yml; `warehouse_id` has no default, so it must be
