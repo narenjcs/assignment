@@ -8,6 +8,56 @@ Cross-cloud, agentic document-intelligence demo spanning **AWS** and **Databrick
 
 ---
 
+## 0. Deployed environment (verified live 2026-09-24)
+
+Both paths are running end to end. This section records what was actually provisioned and the
+environment-specific constraints discovered while deploying; §1-§8 describe the design.
+
+| | |
+|---|---|
+| Web UI (and API, same origin) | https://d3fhr1wqlh1ql9.cloudfront.net |
+| AWS account / region | `<AWS_ACCOUNT_ID>` / `us-east-1` |
+| AWS MCP server (AgentCore Gateway) | 7 tools, exposed as `jobs___<tool>` |
+| AgentCore runtimes | `docintel_orchestrator`, `docintel_docx_agent` (zip deploy, arm64) |
+| Bedrock model | `openai.gpt-oss-120b-1:0` |
+| Databricks workspace | `https://dbc-34766815-3348.cloud.databricks.com` (AWS) |
+| Databricks MCP server | Databricks App `mcp-docintel`, 8 tools |
+| Catalog / schema / table | `workspace.docs.document_results` (Default Storage workspace: the built-in `workspace` catalog is used; a new catalog needs a MANAGED LOCATION) |
+| Volume | `/Volumes/workspace/docs/inbox` |
+| SQL warehouse / FM endpoint | `63ea130ae37ddbb9` / `databricks-gpt-oss-120b` |
+
+**Verified:** DOCX async and PDF sync both complete; both MCP servers list and call each other's
+tools across clouds; SSE streams the contracted `status`/`tool`/`token`/`result`/`done` frames;
+results land in DynamoDB, `results/{jobId}/result.json` in S3, and the Unity Catalog table.
+
+### 0.1 Environment constraints that shaped the implementation
+
+1. **Databricks serverless resolves DNS through an allowlist.** S3, the AgentCore Gateway and
+   PyPI resolve; the **Cognito token endpoint does not** (nor does e.g. `google.com`). The
+   Databricks side therefore cannot mint its own AWS token: the orchestrator passes one in.
+   For the async job the token is written to the `docintel` **secret scope** (never a job
+   parameter - those are stored in run history and shown in the UI); the sync path receives it
+   in the TLS request body.
+2. **The app must not be pip-installed.** `pip install .` caches the wheel by version, and with
+   a static version the app kept serving stale code. `PYTHONPATH=/app/python/source_code/src`
+   in `app.yaml` makes the synced source authoritative.
+3. **`app.yaml` uses camelCase `valueFrom`.** The DAB schema's snake_case `value_from` is
+   silently ignored there, yielding empty env vars. A bundle `resources.apps.<app>.env` block
+   never reached the deployed app *and* replaced `app.yaml`'s env, so all app env lives in
+   `app.yaml`.
+4. **Three distinct identities need grants**: the AWS-side SP (`docintel-aws`), the app's own
+   SP, and the user. A new SP has **no entitlements** - without `workspace-access` every call to
+   the app returns 401 with no hint. The app also needs run rights on the job it triggers.
+5. **The serverless job runs with no `__file__` and inside an existing event loop**, so the
+   entry point resolves its path from the working directory and detects a running loop.
+6. **Gateway tools are prefixed** `jobs___<tool>`; both clouds' clients add the prefix.
+7. **The API is served through CloudFront**, not its Lambda Function URL: some upstream DNS
+   resolvers refuse `*.lambda-url.*.on.aws`, and one origin also removes CORS entirely.
+8. **Terraform** is pinned locally (1.5.5) for the bundle; the CLI's own download fails on
+   HashiCorp's expired signing key.
+
+---
+
 ## 1. Requirement analysis
 
 | # | Requirement (from brief) | Interpretation | Design answer |

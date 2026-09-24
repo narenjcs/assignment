@@ -75,14 +75,18 @@ async def _run_pipeline(deps: Deps, job: dict[str, Any]) -> dict[str, Any]:
         "save_job_result",
         {
             "job_id": job_id,
-            "result_json": result.model_dump_json(by_alias=True),
+            # `exclude_none`: the AWS `save_job_result` zod schema types optional fields as
+            # `string | undefined`, so an explicit null is rejected with
+            # "Invalid input: expected string, received null" (e.g. databricksRunId on a sync
+            # run, which has no Databricks job run at all). Omit them instead.
+            "result_json": result.model_dump_json(by_alias=True, exclude_none=True),
             "processor": PROCESSOR,
             "source": SOURCE,
         },
     )
     _raise_if_aws_failed("save_job_result", saved)
     await _report_status(deps, job_id, "COMPLETED")
-    return ok_result(result.model_dump(by_alias=True))
+    return ok_result(result.model_dump(by_alias=True, exclude_none=True))
 
 
 def _raise_if_aws_failed(tool: str, envelope: dict[str, Any]) -> None:

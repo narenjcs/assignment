@@ -1,10 +1,10 @@
 # Exact pins (DEVELOPMENT.md G6/G12): must match the interpreter used by `databricks bundle`
 # validation and by the serverless job environment in resources/jobs.yml.
-# `.` installs the local `docintel_app` package (pyproject.toml, src/ layout) so
-# `uvicorn docintel_app.server:build_app` is importable in the deployed App — no PYTHONPATH hack.
-# Deliberately NOT `-e .`: an editable install needs a writable source tree, which the Apps
-# build sandbox does not guarantee, and it failed there with "Error installing packages".
-.
+# The local package is deliberately NOT installed here. `pip install .` caches the built wheel
+# by version, and since the version never changes between deploys, pip reuses the stale wheel:
+# the app kept serving old code (an MCP tool's new parameter never appeared) even though the
+# build log showed the new files being synced. `PYTHONPATH` in app.yaml points at the synced
+# source instead, so what is deployed is always what runs.
 mcp==2.1.1
 databricks-sdk==0.140.0
 pydantic==2.12.5

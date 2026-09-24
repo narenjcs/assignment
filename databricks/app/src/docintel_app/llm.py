@@ -5,6 +5,7 @@ pydantic validation error, no regex JSON scraping).
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import cast
 
 from databricks.sdk import WorkspaceClient
@@ -84,4 +85,33 @@ def _complete(client: OpenAI, model: str, messages: list[dict[str, str]]) -> str
     response = client.chat.completions.create(
         model=model, messages=typed_messages, timeout=_TIMEOUT_SECONDS
     )
-    return response.choices[0].message.content or "{}"
+    return _content_text(response.choices[0].message.content)
+
+
+def _content_text(content: object) -> str:
+    """Flatten an assistant message's content into plain text.
+
+    `databricks-gpt-oss-120b` returns a list of typed blocks (e.g. a `reasoning` block followed
+    by a `text` block) rather than a bare string, so reading `.content` directly handed pydantic
+    a list and enrichment failed with "JSON input should be string, bytes or bytearray".
+    """
+    if content is None:
+        return "{}"
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+                continue
+            value = getattr(block, "text", None)
+            if value is None and isinstance(block, Mapping):
+                mapping = cast("Mapping[str, object]", block)
+                if mapping.get("type") == "reasoning":
+                    continue  # chain-of-thought block, never the JSON answer
+                value = mapping.get("text")
+            if isinstance(value, str):
+                parts.append(value)
+        return "\n".join(parts).strip() or "{}"
+    return str(content)

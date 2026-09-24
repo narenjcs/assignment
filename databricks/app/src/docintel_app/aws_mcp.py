@@ -27,6 +27,10 @@ from docintel_app.config import Settings
 
 logger = logging.getLogger(__name__)
 
+GATEWAY_TOOL_PREFIX = "jobs___"
+"""AgentCore Gateway exposes each target's tools as `<targetName>___<tool>`; calling the bare
+name fails with `MCPError: Unknown tool: update_job_status`."""
+
 _tokens: dict[str, tuple[float, str]] = {}
 
 _MAX_ATTEMPTS = 3
@@ -121,7 +125,7 @@ class AwsToolBackend:
         )
         transport = streamable_http_client(settings.aws_gateway_url, http_client=http_client)
         async with Client(transport) as client:
-            result = await client.call_tool(name, arguments)
+            result = await client.call_tool(f"{GATEWAY_TOOL_PREFIX}{name}", arguments)
         return _unwrap(result)
 
 

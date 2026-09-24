@@ -66,7 +66,22 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked (needs Na
 - [x] T8.2 `docs/DEMO.md` runbook
 - [x] T8.3 Root README final pass
 
-## Status 2026-09-24
+## Status 2026-09-24 (deployed and verified)
+
+**Both paths run end to end on live infrastructure.** DOCX (async) and PDF (sync) both complete;
+both MCP servers call each other across clouds; results land in DynamoDB, S3 and the Unity
+Catalog table. UI: https://d3fhr1wqlh1ql9.cloudfront.net
+
+Deploying surfaced **25 defects that no unit test could catch** (5 AWS, 20 Databricks/serverless),
+each fixed in code or in the deploy scripts rather than worked around - see PLAN.md §0.1. The
+pattern worth keeping: every one was an integration or platform-behaviour mismatch (wrong tool
+prefix, camelCase vs snake_case config key, cached wheel, missing entitlement, DNS allowlist),
+invisible to a test suite that mocks its boundaries.
+
+Remaining: async PDF (the serverless job path) is wired and deployed but its last run predates
+the token/secret-scope fix; rerun to confirm. `make e2e` covers all four scenarios.
+
+## Original status
 All 41 build tasks complete. 426 tests green across six workspaces (lambdas 174, agents 85, frontend 77, databricks 35, infra 29, scripts 26); ESLint/Prettier/tsc/Ruff/ty clean; `cdk synth` produces 54 resources. 66 review findings were fixed across 9 review rounds before anything was ticked. Nothing is deployed — the remaining work is live deployment + the E2E run, which needs the items below.
 
 ## Blocked on Naren

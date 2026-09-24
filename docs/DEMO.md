@@ -140,3 +140,27 @@ S3 — the JSON copy of a job's result:
 BUCKET="$(jq -r '.DocIntelStack.UploadsBucket' cdk-outputs.json)"
 aws s3 cp "s3://${BUCKET}/results/<jobId>/result.json" - | jq .
 ```
+
+## Live environment (2026-09-24)
+
+- **UI + API**: https://d3fhr1wqlh1ql9.cloudfront.net (single origin; the API is served through
+  CloudFront, so no CORS and no `*.on.aws` hostname to resolve)
+- **Databricks**: `https://dbc-34766815-3348.cloud.databricks.com`, app `mcp-docintel`,
+  table `workspace.docs.document_results`, volume `/Volumes/workspace/docs/inbox`
+
+Inspect results after a run:
+
+```bash
+# AWS job record + trace
+curl -s https://d3fhr1wqlh1ql9.cloudfront.net/jobs/<jobId> | python3 -m json.tool
+
+# S3 copy of the result
+aws s3 cp s3://docintel-uploads-<AWS_ACCOUNT_ID>/results/<jobId>/result.json - --region us-east-1
+
+# Unity Catalog row (PDF path)
+databricks api post /api/2.0/sql/statements -p docintel --json '{
+  "warehouse_id":"63ea130ae37ddbb9","catalog":"workspace","schema":"docs",
+  "statement":"SELECT job_id,file_name,page_count,word_count,extraction_method,model,run_mode FROM workspace.docs.document_results ORDER BY processed_at DESC LIMIT 5",
+  "wait_timeout":"50s"}'
+```
+

@@ -30,6 +30,10 @@ command:
 # be kept in step with the bundle variables; scripts/deploy-databricks.sh fails the deploy if
 # they diverge.
 env:
+  # Import docintel_app straight from the synced source (see requirements.txt): installing it
+  # as a package made pip serve a cached wheel of an older revision.
+  - name: 'PYTHONPATH'
+    value: '/app/python/source_code/src'
   - name: 'DOCINTEL_CATALOG'
     value: 'workspace'
   - name: 'DOCINTEL_SCHEMA'
