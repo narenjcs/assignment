@@ -19,7 +19,12 @@ export function FlowDiagram({ model, titleId, onInspectNode }: FlowDiagramProps)
   const reducedMotion = useReducedMotion();
 
   return (
-    <svg viewBox={VIEWBOX} role="img" aria-labelledby={titleId} className="h-auto w-full min-w-[720px]">
+    <svg
+      viewBox={VIEWBOX}
+      role="img"
+      aria-labelledby={titleId}
+      className="h-auto w-full min-w-[720px]"
+    >
       <title id={titleId}>{model.summary}</title>
       <FlowDiagramColumns />
 

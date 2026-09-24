@@ -55,6 +55,9 @@ export interface Point {
   y: number;
 }
 
+// Every Databricks node (ucVolume, pdfAgent, ucTable) must sit to the RIGHT of DIVIDER_X and
+// every AWS node to the left: the divider is what tells the viewer which cloud owns a step, so a
+// node on the wrong side is a factual error, not a cosmetic one. `layout.test.ts` enforces it.
 export const NODE_POS: Record<FlowNodeId, Point> = {
   browser: { x: 80, y: 50 },
   s3: { x: 210, y: 50 },
@@ -63,7 +66,7 @@ export const NODE_POS: Record<FlowNodeId, Point> = {
   ucVolume: { x: 650, y: 50 },
   docxAgent: { x: 340, y: 170 },
   pdfAgent: { x: 650, y: 170 },
-  ucTable: { x: 500, y: 260 },
+  ucTable: { x: 660, y: 260 },
   mcpGateway: { x: 210, y: 260 },
 };
 

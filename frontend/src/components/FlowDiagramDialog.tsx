@@ -46,11 +46,21 @@ export function FlowDiagramDialog({ model, onClose }: FlowDiagramDialogProps): R
         </div>
 
         <div className="scroll-panel overflow-x-auto rounded-lg border border-white/10">
-          <FlowDiagram model={model} titleId={`${TITLE_ID}-svg`} onInspectNode={setInspectedNodeId} />
+          <FlowDiagram
+            model={model}
+            titleId={`${TITLE_ID}-svg`}
+            onInspectNode={setInspectedNodeId}
+          />
         </div>
 
-        <div className="mt-3 shrink-0 border-t border-white/10 pt-2">
-          <FlowDiagramInspector model={model} inspectedNodeId={inspectedNodeId} />
+        <div className="mt-3 shrink-0 space-y-1 border-t border-white/10 pt-2">
+          {/* The same text is the SVG's accessible name, where the browser also renders it as a
+              native hover tooltip that gets clipped at the viewport edge. Repeat it as real,
+              wrapping text so the reader never depends on that tooltip. */}
+          <p className="text-[11px] text-white/50">{model.summary}</p>
+          <div className="scroll-panel max-h-24 overflow-y-auto">
+            <FlowDiagramInspector model={model} inspectedNodeId={inspectedNodeId} />
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import type { FlowNode, FlowNodeId } from '../../lib/flow-model';
 import { NODE_BAND, NODE_H, NODE_ICON, NODE_LABEL, NODE_POS, NODE_W } from './layout';
 import { NodeIcon } from './NodeIcon';
 import { activeBorderColor, nodeVisual } from './nodeStyle';
+import { NodeStatusPill } from './NodeStatusPill';
 
 export interface FlowDiagramNodeProps {
   id: FlowNodeId;
@@ -66,11 +67,7 @@ export function FlowDiagramNode({ id, node, onInspectNode }: FlowDiagramNodeProp
         {label}
       </text>
       <foreignObject x={NODE_W / 2 - 34} y={41} width={68} height={14}>
-        <div
-          className={`flex h-[14px] items-center justify-center rounded-full text-[8px] font-medium ${visual.pillClass}`}
-        >
-          {visual.pillLabel}
-        </div>
+        <NodeStatusPill label={visual.pillLabel} className={visual.pillClass} />
       </foreignObject>
     </g>
   );

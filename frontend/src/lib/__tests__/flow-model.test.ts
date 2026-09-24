@@ -242,9 +242,7 @@ describe('computeFlowModel: FAILED job', () => {
 
   it('has no active node and reports the failure message', () => {
     expect(model.activeNodeId).toBeNull();
-    expect(model.summary).toBe(
-      'Job quarterly-report.pdf failed: extract failed: unreadable PDF.',
-    );
+    expect(model.summary).toBe('Job quarterly-report.pdf failed: extract failed: unreadable PDF.');
   });
 });
 

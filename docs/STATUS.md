@@ -43,20 +43,24 @@ were found only by deploying** — see PLAN.md §0.1.
 
 ## What is left
 
-### 1. UI polish (in progress — the only open work)
+### 1. UI polish — ✅ done and deployed
+
+All UI work is finished, committed on branch `ui-polish-flow-dialog`, and live at
+<https://d3fhr1wqlh1ql9.cloudfront.net>. Lint, 95 unit tests, `tsc`, the production build
+and the file-length check all pass. Deployed bundle hash verified against the local build.
+Nothing is outstanding here.
 
 Specified in **[UI-PLAN.md](UI-PLAN.md)**, tracked as **P10 / U1–U7** in [TASKS.md](TASKS.md).
-A Sonnet subagent is part-way through it.
 
 | Task | State | Notes |
 |---|---|---|
 | U1 flow-model | ✅ done | `frontend/src/lib/flow-model.ts`, pure + tested |
-| U2 flow view | in progress | Dark "console" dialog behind a **View flow** button — spec in UI-PLAN §1 |
-| U3 mode cards | todo | sync/async explained where the choice is made |
-| U4 palette | todo | **kill the yellow**; UI-PLAN §3.1 pins every token |
-| U5 agent trace restyle | todo | trace is *kept*; it is the primary visual inside Job detail |
-| U6 scroll + a11y + skeletons | todo | per-panel scroll regions; `min-h-0` flex trap |
-| U7 review + ship | todo | `make deploy-frontend` (~20 s) then verify |
+| U2 flow view | ✅ done | Dark "console" dialog behind the **View flow** button, UI-PLAN §1 |
+| U3 mode cards | ✅ done | sync/async explained where the choice is made |
+| U4 palette | ✅ done | yellow gone; AWS orange survives only as a large-fill accent, never text |
+| U5 agent trace restyle | ✅ done | cloud-coloured rail; collapses once the job is COMPLETED |
+| U6 scroll + a11y + skeletons | ✅ done | per-panel `scroll-panel` regions, focus trap, Esc-to-close |
+| U7 review + ship | ✅ done | deployed via `make deploy-frontend`; bundle hash verified live |
 
 **How to continue it:**
 ```bash

@@ -52,7 +52,9 @@ export function JobTrace({ events }: JobTraceProps): ReactElement {
               )}
               {event.message}
             </p>
-            <p className="text-[10px] tabular-nums text-slate-400">{formatRelativeTime(event.ts)}</p>
+            <p className="text-[10px] tabular-nums text-slate-400">
+              {formatRelativeTime(event.ts)}
+            </p>
           </div>
         </li>
       ))}
