@@ -31,7 +31,7 @@ from docintel_common.mcp_backend import (
     gateway_client,
     require_ok,
 )
-from docintel_common.text import truncate_message
+from docintel_common.text import root_cause, truncate_message
 from events import map_stream_event
 from processors import AwsDocxProcessor, DatabricksPdfProcessor, ProcessorError
 from prompts import SYSTEM_PROMPT
@@ -155,7 +155,18 @@ def workflow_session(settings: Settings) -> Iterator[WorkflowDeps]:
                     f"{settings.databricks_secret_arn} has an empty `host`. "
                     "Run `make link` after deploying the Databricks bundle."
                 )
-            dbx_client = stack.enter_context(databricks_client(dbx_secret))
+            try:
+                dbx_client = stack.enter_context(databricks_client(dbx_secret))
+            except Exception as exc:
+                # Seen live 2026-09-25: a STOPPED Databricks App surfaced only as "unhandled
+                # errors in a TaskGroup (1 sub-exception)". Name the real cause and the fix.
+                cause = root_cause(exc)
+                raise ProcessorError(
+                    f"Cannot connect to the Databricks MCP App at {dbx_secret.get('mcpUrl')}: "
+                    f"{type(cause).__name__}: {cause}. Check the App is RUNNING "
+                    "(`databricks apps get mcp-docintel`; start it with "
+                    "`databricks apps start mcp-docintel`)."
+                ) from exc
             return McpToolBackend(dbx_client)
 
         agent = build_agent(aws_client, None, settings)

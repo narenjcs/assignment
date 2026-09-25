@@ -8,7 +8,12 @@ import {
 import { mockClient } from 'aws-sdk-client-mock';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ValidationError } from '../../src/lib/errors.js';
-import { buildUploadKey, createS3Helper, parseUploadKey } from '../../src/lib/s3.js';
+import {
+  buildUploadKey,
+  createS3Helper,
+  parseContentRangeTotal,
+  parseUploadKey,
+} from '../../src/lib/s3.js';
 
 describe('buildUploadKey / parseUploadKey', () => {
   it('builds a sync upload key and round-trips it', () => {
@@ -84,6 +89,24 @@ describe('createS3Helper', () => {
     await expect(helper.getObjectBytes('uploads/sync/job-1/missing.docx')).rejects.toThrow(
       ValidationError,
     );
+  });
+
+  it('getObjectRange sends an inclusive byte Range and reads the total from Content-Range', async () => {
+    const bytes = new Uint8Array([4, 5, 6]);
+    s3Mock.on(GetObjectCommand).resolves({
+      Body: { transformToByteArray: () => Promise.resolve(bytes) } as never,
+      ContentRange: 'bytes 10-12/1234',
+    });
+    const result = await helper.getObjectRange('uploads/sync/job-1/report.pdf', 10, 3);
+    expect(s3Mock.commandCalls(GetObjectCommand)[0]?.args[0].input.Range).toBe('bytes=10-12');
+    expect(result).toEqual({ bytes, totalBytes: 1234 });
+  });
+
+  it('parseContentRangeTotal handles present, malformed and missing headers', () => {
+    expect(parseContentRangeTotal('bytes 0-99/5000')).toBe(5000);
+    expect(parseContentRangeTotal('bytes */5000')).toBe(5000);
+    expect(parseContentRangeTotal('garbage')).toBeUndefined();
+    expect(parseContentRangeTotal(undefined)).toBeUndefined();
   });
 
   it('putJson serializes the object and writes it with an application/json content type', async () => {

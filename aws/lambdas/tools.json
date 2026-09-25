@@ -96,10 +96,17 @@
   },
   {
     "name": "get_document_content",
-    "description": "Return the job's document bytes base64-encoded (max 4 MB), for callers that cannot reach S3 (e.g. Databricks serverless, whose egress blocks S3) and so cannot use get_download_url.",
+    "description": "Return one base64-encoded byte range of the job's document, for callers that cannot reach S3 (e.g. Databricks serverless, whose egress blocks S3) and so cannot use get_download_url. Call from offset 0, advance offset by chunkBytes, and stop when done is true; any document size works.",
     "inputSchema": {
       "type": "object",
-      "properties": { "job_id": { "type": "string" } },
+      "properties": {
+        "job_id": { "type": "string" },
+        "offset": { "type": "integer", "description": "Byte offset to start at. Default 0" },
+        "length": {
+          "type": "integer",
+          "description": "Max bytes to return. Default and max 3145728 (3 MB)"
+        }
+      },
       "required": ["job_id"]
     }
   }

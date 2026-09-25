@@ -138,12 +138,16 @@ make e2e                           # all four scenarios
 4. **Databricks serverless egress is restricted.** The AgentCore Gateway resolves; Cognito does
    not, which is why AWS passes the token in. Since 2026-09-25 **S3 is blocked too**
    (`Connection reset by peer`), which is why `ingest_pdf` fetches the PDF through the Gateway's
-   `get_document_content` tool. Path-style S3 URLs do not help; the proxy blocks all of S3.
+   `get_document_content` tool (chunked, any size). Path-style S3 URLs do not help; the proxy
+   blocks all of S3.
 5. **An expired Databricks bearer returns 403, not 401.** Catch both when touching auth code.
 6. **Never pass a token as a Databricks job parameter** — parameters persist in run history.
 7. **Do not `sys.exit(0)` in a serverless Python task** — any `SystemExit` marks the run Failed.
 8. **Shell output here passes through a compressor** that can mangle file contents; use `Read`
    or structured output (`jq`, `--reporter=json`) for anything you reason about.
+9. **The Databricks App can be stopped by the platform** ("stopped due to workspace or account
+   status"). PDF jobs then fail with "Cannot connect to the Databricks MCP App". Start it with
+   `databricks --profile docintel apps start mcp-docintel`; `make e2e` checks this up front.
 
 ### Where to read what
 | Question | Document |

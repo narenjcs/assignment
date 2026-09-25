@@ -15,13 +15,27 @@ from docintel_app.tools import ToolFn, guarded
 
 logger = logging.getLogger(__name__)
 
+MAX_DOCUMENT_BYTES = 200 * 1024 * 1024
+"""Upper bound on what the chunk loop will assemble in memory; a guard, not a product limit."""
+
 
 async def _fetch_via_gateway(deps: Deps, job_id: str) -> bytes:
-    """Fetch the document bytes through the AWS MCP Gateway (`get_document_content`)."""
-    result = await deps.aws.call("get_document_content", {"job_id": job_id})
-    if not result.get("ok"):
-        raise RuntimeError(f"get_document_content failed: {result.get('error')}")
-    return base64.b64decode(result["data"]["contentBase64"], validate=True)
+    """Fetch the document through the AWS MCP Gateway, one `get_document_content` chunk at a
+    time (each ≤ 3 MB so it fits a Lambda response) until the tool reports `done`."""
+    parts: list[bytes] = []
+    offset = 0
+    while True:
+        result = await deps.aws.call("get_document_content", {"job_id": job_id, "offset": offset})
+        if not result.get("ok"):
+            raise RuntimeError(f"get_document_content failed: {result.get('error')}")
+        data = result["data"]
+        chunk = base64.b64decode(data["contentBase64"], validate=True)
+        parts.append(chunk)
+        offset += len(chunk)
+        if data["done"]:
+            return b"".join(parts)
+        if not chunk or offset > MAX_DOCUMENT_BYTES:
+            raise RuntimeError(f"get_document_content stopped making progress at byte {offset}")
 
 
 async def _fetch_pdf(deps: Deps, job_id: str, download_url: str) -> bytes:

@@ -58,6 +58,7 @@ function fakeDeps(overrides: Partial<JobsToolDeps> = {}): JobsToolDeps {
       presignUpload: vi.fn(),
       presignDownload: vi.fn(),
       getObjectBytes: vi.fn(),
+      getObjectRange: vi.fn(),
       putJson: vi.fn(),
       headObject: vi.fn(),
     },

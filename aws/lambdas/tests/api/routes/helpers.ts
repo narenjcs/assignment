@@ -38,6 +38,7 @@ export function fakeS3Helper(overrides: Partial<S3Helper> = {}): S3Helper {
     presignUpload: vi.fn(),
     presignDownload: vi.fn(),
     getObjectBytes: vi.fn(),
+    getObjectRange: vi.fn(),
     putJson: vi.fn(),
     headObject: vi.fn(),
     ...overrides,

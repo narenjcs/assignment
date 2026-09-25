@@ -68,10 +68,22 @@ export interface HeadObjectResult {
   sizeBytes: number;
 }
 
+export interface ObjectRange {
+  bytes: Uint8Array;
+  totalBytes: number;
+}
+
+/** Total object size from a ranged GET's `Content-Range: bytes 0-99/1234` header. */
+export function parseContentRangeTotal(contentRange: string | undefined): number | undefined {
+  const match = /\/(\d+)$/.exec(contentRange ?? '');
+  return match ? Number(match[1]) : undefined;
+}
+
 export interface S3Helper {
   presignUpload: (key: string, contentType: string) => Promise<string>;
   presignDownload: (key: string, ttlSeconds?: number) => Promise<string>;
   getObjectBytes: (key: string) => Promise<Uint8Array>;
+  getObjectRange: (key: string, offset: number, length: number) => Promise<ObjectRange>;
   putJson: (key: string, obj: unknown) => Promise<void>;
   headObject: (key: string) => Promise<HeadObjectResult | undefined>;
 }
@@ -98,6 +110,17 @@ export function createS3Helper(deps: S3HelperDeps): S3Helper {
     return res.Body.transformToByteArray();
   }
 
+  async function getObjectRange(key: string, offset: number, length: number): Promise<ObjectRange> {
+    const range = `bytes=${offset}-${offset + length - 1}`;
+    const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range }));
+    if (!res.Body) {
+      throw new ValidationError('EMPTY_OBJECT', `S3 object has no body: ${key}`);
+    }
+    const bytes = await res.Body.transformToByteArray();
+    const totalBytes = parseContentRangeTotal(res.ContentRange) ?? offset + bytes.byteLength;
+    return { bytes, totalBytes };
+  }
+
   async function putJson(key: string, obj: unknown): Promise<void> {
     await s3.send(
       new PutObjectCommand({
@@ -121,5 +144,5 @@ export function createS3Helper(deps: S3HelperDeps): S3Helper {
     }
   }
 
-  return { presignUpload, presignDownload, getObjectBytes, putJson, headObject };
+  return { presignUpload, presignDownload, getObjectBytes, getObjectRange, putJson, headObject };
 }

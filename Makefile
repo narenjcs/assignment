@@ -83,9 +83,9 @@ format: .venv/bin/ruff ## Auto-format TS (prettier) and Python (ruff)
 
 test: .venv/bin/ruff ## vitest (TS workspaces) + pytest (Python)
 	@npm test --silent
-	@[ -d aws/agents/tests ] && .venv/bin/pytest -q aws/agents/tests || true
-	@[ -d databricks/tests ] && .venv/bin/pytest -q databricks/tests || true
-	@[ -d scripts/tests ] && .venv/bin/pytest -q scripts/tests || true
+	@if [ -d aws/agents/tests ]; then .venv/bin/pytest -q aws/agents/tests; fi
+	@if [ -d databricks/tests ]; then .venv/bin/pytest -q databricks/tests; fi
+	@if [ -d scripts/tests ]; then .venv/bin/pytest -q scripts/tests; fi
 
 check: lint test ## Quality gate required before a task is marked done
 

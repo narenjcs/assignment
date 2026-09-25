@@ -35,6 +35,25 @@ fi
 echo "==> API: ${API}"
 echo "==> Logs: ${LOG_DIR}"
 
+# The Databricks App can be stopped out from under us (seen 2026-09-25: "App compute was stopped
+# due to workspace or account status"); every PDF run then fails with an opaque MCP connect
+# error. Fail fast here with the fix instead of four minutes of FAILED scenarios.
+DBX_APP="${DOCINTEL_APP_NAME:-mcp-docintel}"
+DBX_PROFILE="${DATABRICKS_CONFIG_PROFILE:-docintel}"
+if command -v databricks >/dev/null; then
+  app_state="$(databricks --profile "$DBX_PROFILE" apps get "$DBX_APP" -o json 2>/dev/null \
+    | jq -r '"\(.app_status.state // "UNKNOWN")/\(.compute_status.state // "UNKNOWN")"')" \
+    || app_state="UNKNOWN/UNKNOWN"
+  if [[ "$app_state" != "RUNNING/ACTIVE" ]]; then
+    echo "!! Databricks App ${DBX_APP} is ${app_state} (app/compute), so PDF scenarios would fail." >&2
+    echo "   Start it: databricks --profile ${DBX_PROFILE} apps start ${DBX_APP}" >&2
+    exit 1
+  fi
+  echo "==> Databricks App: ${DBX_APP} ${app_state}"
+else
+  echo "==> databricks CLI not on PATH; skipping the Databricks App preflight"
+fi
+
 if [[ ! -f "${ROOT}/samples/sample-contract.docx" || ! -f "${ROOT}/samples/sample-report.pdf" ]]; then
   echo "==> Sample files missing; running \`make samples\`"
   (cd "$ROOT" && make samples)
