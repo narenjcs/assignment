@@ -135,8 +135,10 @@ make e2e                           # all four scenarios
 2. **Terraform must be on `PATH`** for any Databricks bundle command — the CLI's own download
    fails on HashiCorp's expired signing key. `make prereqs` checks it.
 3. **Never use the `dev` / `prod` Databricks profiles** — they belong to another project.
-4. **Databricks serverless DNS is allow-listed.** S3 and the AgentCore Gateway resolve; the
-   Cognito endpoint does not. That is why AWS passes the token in.
+4. **Databricks serverless egress is restricted.** The AgentCore Gateway resolves; Cognito does
+   not, which is why AWS passes the token in. Since 2026-09-25 **S3 is blocked too**
+   (`Connection reset by peer`), which is why `ingest_pdf` fetches the PDF through the Gateway's
+   `get_document_content` tool. Path-style S3 URLs do not help; the proxy blocks all of S3.
 5. **An expired Databricks bearer returns 403, not 401.** Catch both when touching auth code.
 6. **Never pass a token as a Databricks job parameter** — parameters persist in run history.
 7. **Do not `sys.exit(0)` in a serverless Python task** — any `SystemExit` marks the run Failed.

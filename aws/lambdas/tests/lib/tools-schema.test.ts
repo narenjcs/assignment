@@ -9,6 +9,7 @@ const EXPECTED_TOOL_NAMES = [
   'save_job_result',
   'extract_docx_text',
   'get_download_url',
+  'get_document_content',
 ];
 
 describe('loadToolSchemas', () => {

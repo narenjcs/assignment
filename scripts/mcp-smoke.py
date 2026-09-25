@@ -29,7 +29,7 @@ TIMEOUT_SECONDS = 20.0
 GATEWAY_TARGET_PREFIX = "jobs___"
 AWS_TOOL_NAMES = tuple(
     "get_job list_jobs update_job_status append_job_event "  # noqa: SIM905
-    "save_job_result extract_docx_text get_download_url".split()
+    "save_job_result extract_docx_text get_download_url get_document_content".split()
 )
 DATABRICKS_TOOL_NAMES = tuple(
     "ingest_pdf extract_pdf_text enrich_document persist_document_result "  # noqa: SIM905

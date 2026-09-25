@@ -1,5 +1,6 @@
 import type { JobStore } from '../lib/jobs.js';
 import type { S3Helper } from '../lib/s3.js';
+import { getDocumentContent, getDocumentContentArgsSchema } from './tools/content.js';
 import { extractDocxText, extractDocxTextArgsSchema } from './tools/docx.js';
 import {
   appendJobEvent,
@@ -47,4 +48,5 @@ export const TOOL_REGISTRY: Record<string, ToolEntry> = {
   save_job_result: entry(saveJobResultArgsSchema, saveJobResult),
   extract_docx_text: entry(extractDocxTextArgsSchema, extractDocxText),
   get_download_url: entry(getDownloadUrlArgsSchema, getDownloadUrl),
+  get_document_content: entry(getDocumentContentArgsSchema, getDocumentContent),
 };

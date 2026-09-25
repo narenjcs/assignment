@@ -93,5 +93,14 @@
       },
       "required": ["job_id"]
     }
+  },
+  {
+    "name": "get_document_content",
+    "description": "Return the job's document bytes base64-encoded (max 4 MB), for callers that cannot reach S3 (e.g. Databricks serverless, whose egress blocks S3) and so cannot use get_download_url.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "job_id": { "type": "string" } },
+      "required": ["job_id"]
+    }
   }
 ]

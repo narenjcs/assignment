@@ -59,8 +59,9 @@ export class Gateway extends Construct {
           'DocIntel job tools. Use these to read and update document-processing jobs: get_job ' +
           'and list_jobs to read state, update_job_status and append_job_event to report ' +
           'progress, save_job_result to persist the final structured result, extract_docx_text ' +
-          'to pull text out of a DOCX in S3, and get_download_url to hand a document to another ' +
-          'cloud. Always report progress before and after long steps.',
+          'to pull text out of a DOCX in S3, get_download_url to hand a document to another ' +
+          'cloud, and get_document_content to fetch its bytes inline when the caller cannot ' +
+          'reach S3. Always report progress before and after long steps.',
         supportedVersions: [agentcore.MCPProtocolVersion.MCP_2025_06_18],
       }),
       authorizerConfiguration: agentcore.GatewayAuthorizer.usingCognito({

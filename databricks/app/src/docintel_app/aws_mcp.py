@@ -77,10 +77,10 @@ class AwsToolBackend:
     def __init__(self, settings: Settings, *, token: str | None = None) -> None:
         """`token`: a Cognito access token minted by the AWS side.
 
-        Serverless compute here resolves DNS through an allowlist: the AgentCore Gateway and S3
-        resolve, but the Cognito token endpoint does NOT ("Temporary failure in name
-        resolution"). When AWS passes its own token in, we skip minting one entirely and this
-        side never needs to reach Cognito.
+        Serverless egress here is restricted: the AgentCore Gateway is reachable, but the
+        Cognito token endpoint does NOT resolve ("Temporary failure in name resolution") and
+        S3 connections are reset. When AWS passes its own token in, we skip minting one
+        entirely and this side never needs to reach Cognito.
         """
         self._settings = settings
         self._token = token

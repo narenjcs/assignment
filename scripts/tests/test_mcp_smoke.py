@@ -28,7 +28,7 @@ _spec.loader.exec_module(mcp_smoke)
 
 def test_expected_aws_tools_matches_tools_json() -> None:
     tools = mcp_smoke.expected_aws_tools()
-    assert len(tools) == 7
+    assert len(tools) == 8
     assert set(tools) == {
         "get_job",
         "list_jobs",
@@ -37,6 +37,7 @@ def test_expected_aws_tools_matches_tools_json() -> None:
         "save_job_result",
         "extract_docx_text",
         "get_download_url",
+        "get_document_content",
     }
 
 

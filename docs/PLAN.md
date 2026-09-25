@@ -32,8 +32,11 @@ results land in DynamoDB, `results/{jobId}/result.json` in S3, and the Unity Cat
 
 ### 0.1 Environment constraints that shaped the implementation
 
-1. **Databricks serverless resolves DNS through an allowlist.** S3, the AgentCore Gateway and
-   PyPI resolve; the **Cognito token endpoint does not** (nor does e.g. `google.com`). The
+1. **Databricks serverless egress is restricted.** The AgentCore Gateway and PyPI are
+   reachable; the **Cognito token endpoint does not resolve** (nor does e.g. `google.com`), and
+   **since 2026-09-25 every S3 endpoint** (any bucket, region or addressing style) resolves to a
+   private proxy that resets the TLS handshake. So the PDF is fetched through the Gateway
+   (`get_document_content`, base64, ≤ 4 MB); the presigned URL is only a fallback. The
    Databricks side therefore cannot mint its own AWS token: the orchestrator passes one in.
    For the async job the token is written to the `docintel` **secret scope** (never a job
    parameter - those are stored in run history and shown in the UI); the sync path receives it
@@ -272,7 +275,7 @@ SSE frame format: `data: <json>\n\n`, optional `: ping\n\n` heartbeat every 15 s
 
 ### 2.7 MCP tool catalogue
 **AWS Gateway (`docintel-gw`)** – Lambda target `jobs`
-`get_job`, `list_jobs`, `update_job_status`, `append_job_event`, `save_job_result` (DynamoDB + S3 `results/{jobId}/result.json`), `extract_docx_text`, `get_download_url`
+`get_job`, `list_jobs`, `update_job_status`, `append_job_event`, `save_job_result` (DynamoDB + S3 `results/{jobId}/result.json`), `extract_docx_text`, `get_download_url`, `get_document_content` (base64 bytes ≤ 4 MB, for callers that cannot reach S3)
 
 **Databricks App (`mcp-docintel`)** – `/mcp`
 `ingest_pdf`, `extract_pdf_text`, `enrich_document`, `persist_document_result`, `get_document_result`, `run_pdf_agent`, `get_pdf_run_status`, `health`

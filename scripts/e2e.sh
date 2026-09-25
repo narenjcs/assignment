@@ -116,7 +116,8 @@ if [[ -n "${LAST_COMPLETED_JOB_ID:-}" ]]; then
   curl -sS --max-time 60 -X POST "${API}/chat" -H 'content-type: application/json' \
     -d "$(jq -n --arg j "$LAST_COMPLETED_JOB_ID" '{jobId:$j, message:"Summarize this document in one sentence."}')" \
     >"$CHAT_LOG" 2>&1 || true
-  if grep -q '"type":"token"\|"type":"result"' "$CHAT_LOG"; then
+  # The chat stream serialises as `"type": "token"` (space after the colon); match either form.
+  if grep -Eq '"type": ?"(token|result)"' "$CHAT_LOG"; then
     echo "    OK — see ${CHAT_LOG}"
   else
     echo "    FAILED — no token/result events, see ${CHAT_LOG}"
