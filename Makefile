@@ -104,8 +104,11 @@ unlock: ## Restore public API service after `make lock`
 access-status: ## Report whether the public API is locked, and probe it live
 	@./scripts/access.sh status
 
+clean-test-data: ## Count test data in all stores (dry run); ARGS="--yes" to actually delete it
+	@./scripts/clean-test-data.sh $(ARGS)
+
 destroy: ## Tear down AWS stack and Databricks bundle
 	@cd aws/infra && npx cdk destroy --force
 	@cd databricks && databricks bundle destroy --auto-approve -p $(DATABRICKS_CONFIG_PROFILE) || true
 
-.PHONY: help venv prereqs samples build build-agents deploy-frontend deploy-lambdas deploy-agents deploy-dbx-app deploy-dbx-job build-frontend deploy-aws deploy-databricks link e2e dev-frontend lock unlock access-status destroy lint format test check hooks
+.PHONY: help venv prereqs samples build build-agents deploy-frontend deploy-lambdas deploy-agents deploy-dbx-app deploy-dbx-job build-frontend deploy-aws deploy-databricks link e2e dev-frontend lock unlock access-status clean-test-data destroy lint format test check hooks
