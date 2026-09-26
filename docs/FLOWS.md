@@ -28,7 +28,7 @@ Measured end-to-end times on the deployed stack (two-page documents):
 | `s3-trigger` Lambda | AWS | Fires on `ObjectCreated`, marks the job uploaded, queues async work |
 | **Orchestrator** | AWS, AgentCore Runtime | Decides the route, drives the job, streams events |
 | **DOCX agent** | AWS, AgentCore Runtime | Extracts and enriches DOCX |
-| **AgentCore Gateway** | AWS | **MCP server** — 7 job tools, Cognito JWT auth, Lambda target |
+| **AgentCore Gateway** | AWS | **MCP server** — 8 job tools, Cognito JWT auth, Lambda target |
 | **Databricks App** | Databricks | **MCP server** — 8 tools, plus the PDF agent in-process |
 | `docintel_pdf_agent` | Databricks | Serverless job running the same PDF agent for async |
 | DynamoDB / S3 / UC table | both | Job state + trace / documents + result JSON / structured PDF results |
@@ -294,6 +294,100 @@ disabled.
   the error pointing at the cause.
 - **Job parameters are stored in run history and shown in the UI**, so a bearer token must never
   be one. The App writes it to the secret scope instead.
+
+---
+
+## 6. Chat follow-up — questions about a finished job
+
+Available once a job is `COMPLETED`. Chat never re-reads the document. It answers from the
+stored result JSON only, and it never changes the job.
+
+**Who does what, and where the data comes from:**
+
+```mermaid
+flowchart TB
+    U["👤 User<br/>types a question"]
+
+    subgraph AWS["☁️ AWS"]
+        API["🌐 API Lambda<br/>(receives the question)"]
+        ORC["🧠 Orchestrator agent<br/>(AgentCore)"]
+        GW["🔌 MCP Gateway<br/>tool: get_job"]
+        DDB[("🗄️ DynamoDB<br/>job + saved result")]
+        LLM["🤖 Bedrock AI model<br/>gpt-oss-120b"]
+    end
+
+    subgraph EARLIER["⏪ Earlier, when the document was processed"]
+        DOCX["DOCX agent (AWS)"]
+        PDF["PDF agent (Databricks)"]
+    end
+
+    U -- "1 · question + jobId" --> API
+    API -- "2 · question + jobId" --> ORC
+    ORC -- "3 · get_job(jobId)" --> GW
+    GW -- "4 · read job" --> DDB
+    DDB -- "5 · saved result<br/>(summary, key points, entities)" --> ORC
+    ORC -- "6 · saved result + question" --> LLM
+    LLM -- "7 · answer, word by word" --> ORC
+    ORC -- "8 · answer stream" --> API
+    API -- "9 · answer appears" --> U
+
+    DOCX -. "saved the result<br/>(save_job_result)" .-> DDB
+    PDF -. "saved the result<br/>(save_job_result)" .-> DDB
+```
+
+The solid arrows are what happens when you ask. The dotted arrows happened earlier: whichever
+agent processed the document saved its result in DynamoDB, and chat reads that saved copy.
+The original document is never opened again, and Databricks is not called.
+
+**In detail:**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser<br/>(ChatPanel)
+    participant CF as CloudFront
+    participant API as api Lambda<br/>(RESPONSE_STREAM)
+    participant DDB as DynamoDB
+    participant ORC as Orchestrator<br/>(AgentCore)
+    participant SM as Secrets Manager<br/>+ Cognito
+    participant GW as MCP Gateway
+    participant MT as mcp-tools Lambda
+    participant LLM as Bedrock<br/>gpt-oss-120b
+
+    Note over B: input enabled only when<br/>job.status = COMPLETED
+    B->>CF: POST /chat {jobId, message}
+    CF->>API: forward
+    API->>DDB: get job (404 if unknown)
+    API-->>B: open SSE stream
+    API->>ORC: InvokeAgentRuntime (IAM)<br/>session {jobId}-chat, mode: chat
+    ORC->>SM: read aws-mcp secret, mint JWT
+    ORC->>GW: open MCP session (Bearer JWT)
+    ORC->>GW: get_job(jobId)
+    GW->>MT: invoke
+    MT->>DDB: read job + stored result
+    MT-->>ORC: {ok, data: job with result}
+    Note over ORC: prompt = stored result JSON<br/>+ user question
+    ORC->>LLM: stream (Strands Agent)
+    loop as the model writes
+        LLM-->>ORC: text delta
+        ORC-->>API: token frame
+        API-->>B: data: {"type": "token"}
+    end
+    ORC-->>API: done frame
+    API-->>B: data: {"type": "done"}
+    Note over B,LLM: any failure → error frame, then done<br/>(nothing to mark FAILED: chat is read-only)
+```
+
+**Things to know:**
+- **Grounded, not open-ended.** The system prompt restricts answers to the stored result. If
+  the analysis doesn't cover the question, the model says so rather than guessing.
+- **Stateless.** The browser sends only `{jobId, message}` and the orchestrator builds a fresh
+  agent per call, so each question is answered on its own. "What about the second point?"
+  won't know what the first answer said. Sending the prior turns would fix it.
+- **Never reaches Databricks.** Even for a PDF, chat reads the copy of the result saved in
+  DynamoDB. The Databricks MCP client is opened lazily and chat never triggers it.
+- **Same streaming path as sync processing.** The API Lambda relays the orchestrator's SSE
+  frames unchanged, so the UI uses one SSE parser for both.
 
 ---
 
