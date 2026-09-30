@@ -1,5 +1,5 @@
 """`orchestrator/main.py`: mode dispatch. The async branch must return `{"accepted": True, ...}`
-immediately, scheduling the workflow as a background task rather than awaiting it (main.py's own
+immediately, running the workflow on a background thread rather than awaiting it (main.py's own
 docstring claim); sync/chat branches must return an async-iterable sourced from `run_job`/
 `run_chat`. `workflow_session`/`run_job`/`run_chat`/`drain` are monkeypatched so no MCP client or
 Bedrock model is ever constructed.
@@ -12,6 +12,7 @@ chat) or a best-effort FAILED status write plus `complete_async_task` (async).
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import AsyncIterator, Coroutine
 from contextlib import contextmanager
 from typing import Any
@@ -34,49 +35,45 @@ def _raising_workflow_session(settings: object):
     yield  # pragma: no cover - unreachable, keeps this a generator function
 
 
-def test_handler_async_mode_returns_accepted_before_background_task_runs(
+def test_handler_async_mode_returns_accepted_then_drains_in_background(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    state = {"entered_session": False, "drained": False}
-
-    @contextmanager
-    def tracking_workflow_session(settings: object):
-        state["entered_session"] = True
-        yield "deps-sentinel"
+    drained = threading.Event()
 
     async def fake_drain(deps: object, job_id: str, mode: str) -> None:
         assert deps == "deps-sentinel"
-        state["drained"] = True
+        drained.set()
 
-    monkeypatch.setattr(main, "workflow_session", tracking_workflow_session)
+    monkeypatch.setattr(main, "workflow_session", _fake_workflow_session)
     monkeypatch.setattr(main, "drain", fake_drain)
 
-    async def scenario() -> dict:
-        response = await main.handler({"jobId": "job-1", "mode": "async"}, RequestContext())
-        assert state["entered_session"] is False, "background work must not run before return"
-        await asyncio.sleep(0)
-        assert state["drained"] is True
-        return response
+    response = run_async(main.handler({"jobId": "job-1", "mode": "async"}, RequestContext()))
 
-    response = run_async(scenario())
     assert response == {"accepted": True, "jobId": "job-1"}
+    assert drained.wait(timeout=2), "background workflow never ran"
 
 
-def test_schedule_background_discards_task_reference_once_done() -> None:
-    done = {"flag": False}
+def test_async_accept_is_not_held_by_a_blocking_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression (2026-09-30): mirrors the SDK's dispatch - `handler` runs on a worker loop in
+    another thread and its result is read via `run_coroutine_threadsafe`. A blocking workflow on
+    that loop used to hold the result until the job finished (80 s for a PDF)."""
+    release = threading.Event()
 
-    async def coro() -> None:
-        done["flag"] = True
+    async def blocking_drain(deps: object, job_id: str, mode: str) -> None:
+        release.wait(timeout=5)  # blocking, like the sync MCP client and `time.sleep` polling
 
-    async def scenario() -> None:
-        main._schedule_background(coro())
-        assert len(main._background_tasks) == 1
-        await asyncio.sleep(0)
-        assert done["flag"] is True
-        await asyncio.sleep(0)  # let the task's add_done_callback fire (scheduled, not inline)
-        assert len(main._background_tasks) == 0
-
-    run_async(scenario())
+    monkeypatch.setattr(main, "workflow_session", _fake_workflow_session)
+    monkeypatch.setattr(main, "drain", blocking_drain)
+    worker_loop = asyncio.new_event_loop()
+    threading.Thread(target=worker_loop.run_forever, daemon=True).start()
+    try:
+        future = asyncio.run_coroutine_threadsafe(
+            main.handler({"jobId": "job-1", "mode": "async"}, RequestContext()), worker_loop
+        )
+        assert future.result(timeout=1) == {"accepted": True, "jobId": "job-1"}
+    finally:
+        release.set()
+        worker_loop.call_soon_threadsafe(worker_loop.stop)
 
 
 def test_handler_sync_mode_streams_events_from_run_job(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,17 +165,10 @@ def test_run_background_marks_failed_and_completes_task_when_session_fails(
     monkeypatch.setattr(main, "mark_job_failed_best_effort", fake_mark_failed)
     monkeypatch.setattr(main.app, "complete_async_task", fake_complete_async_task)
 
-    async def scenario() -> dict:
-        response = await main.handler({"jobId": "job-9", "mode": "async"}, RequestContext())
-        for _ in range(5):
-            await asyncio.sleep(0)
-        return response
+    run_async(main._run_background("job-9", 7))
 
-    response = run_async(scenario())
-
-    assert response == {"accepted": True, "jobId": "job-9"}
     assert marked == ["job-9"]
-    assert len(completed) == 1
+    assert completed == [7]
 
 
 async def _collect(handler_coro: Coroutine[Any, Any, AsyncIterator[dict]]) -> list[dict]:

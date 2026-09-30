@@ -1,8 +1,8 @@
 """AgentCore entrypoint for the orchestrator (T4.2): sync/async/chat modes over one job
 (PLAN.md §2.2). Verified against `bedrock_agentcore.BedrockAgentCoreApp.add_async_task(name,
 metadata=None) -> int` / `.complete_async_task(task_id) -> bool` (bedrock-agentcore==1.23.1):
-the async branch calls `add_async_task`, schedules the workflow as a background `asyncio` task
-and returns `{"accepted": True, "jobId": ...}` immediately, without awaiting it.
+the async branch calls `add_async_task`, runs the workflow on a background thread and returns
+`{"accepted": True, "jobId": ...}` immediately, without awaiting it.
 
 Every entry path here guarantees an `error` + `done` frame (or, for async, a FAILED job status)
 even when `workflow_session` itself fails - secrets lookup, token exchange, or MCP connect can
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from collections.abc import AsyncIterator, Coroutine
 from typing import Any
@@ -27,7 +28,6 @@ from workflow import drain, run_chat, run_job
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("orchestrator")
-_background_tasks: set[asyncio.Task] = set()
 
 app = BedrockAgentCoreApp()
 settings = get_settings()
@@ -55,13 +55,15 @@ async def handler(payload: dict, context: RequestContext) -> dict | AsyncIterato
 
 
 def _schedule_background(coro: Coroutine[Any, Any, None]) -> None:
-    """Fire-and-forget a coroutine while keeping a strong reference until it completes.
+    """Fire-and-forget a coroutine on its own thread and event loop.
 
-    Without this, `asyncio` may garbage-collect an un-referenced task mid-flight.
+    Not `asyncio.create_task`: the SDK runs `handler` on a single worker loop and hands its
+    return value back through a `call_soon` callback on that same loop. The workflow is blocking
+    I/O (sync MCP client, boto3, `time.sleep` polling), so a task on that loop starved the
+    callback and held the `accepted` response until the whole job finished (80 s for a PDF,
+    seen on 2026-09-30 as `orchestrator_async_accepted` landing after `_completed`).
     """
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    threading.Thread(target=asyncio.run, args=(coro,), daemon=True).start()
 
 
 async def _sync_stream(job_id: str, mode: str) -> AsyncIterator[dict]:
