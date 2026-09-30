@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { loadConfig } from '../lib/config.js';
 import { NotFoundError } from '../lib/errors.js';
+import { createLogger } from '../lib/log.js';
 import type { RouteContext } from './context.js';
 import { buildRouteContext } from './context.js';
 import { buildApiDeps } from './deps.js';
@@ -56,17 +57,34 @@ function matchRoute(
 
 // Clients are constructed once per module (cold start) per DEVELOPMENT.md §3.
 const deps = buildApiDeps(loadConfig());
+const log = createLogger('api');
 
 export const handler = awslambda.streamifyResponse(async (event, responseStream) => {
   const requestId = randomUUID();
   const ctx = buildRouteContext(event as APIGatewayProxyEventV2, responseStream, requestId, deps);
   const found = matchRoute(ctx.method, ctx.path);
+  const startedAt = Date.now();
   try {
     if (!found) {
       throw new NotFoundError('ROUTE_NOT_FOUND', `No route for ${ctx.method} ${ctx.path}`);
     }
     await found.route.handle(ctx, found.params);
+    log.info('api_request_completed', 'API request completed', {
+      requestId,
+      method: ctx.method,
+      path: ctx.path,
+      durationMs: Date.now() - startedAt,
+    });
+    log.metric('ApiRequest', 1, { outcome: 'success' });
   } catch (error) {
+    log.error('api_request_failed', 'API request failed', {
+      requestId,
+      method: ctx.method,
+      path: ctx.path,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    log.metric('ApiRequest', 1, { outcome: 'failure' });
     writeErrorResponse(responseStream, requestId, error);
   }
 });

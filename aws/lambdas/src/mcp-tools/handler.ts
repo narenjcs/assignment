@@ -55,20 +55,30 @@ function toToolError(error: unknown): { code: string; message: string } {
  */
 export async function handler(event: unknown, context: Context): Promise<McpToolResult> {
   let toolName = '';
+  const startedAt = Date.now();
   try {
     toolName = resolveToolName(context);
     const tool = TOOL_REGISTRY[toolName];
     if (!tool) {
+      log.error('mcp_tool_failed', 'Unknown tool', { tool: toolName, code: 'UNKNOWN_TOOL' });
+      log.metric('McpToolInvocation', 1, { tool: 'unknown', outcome: 'failure' });
       return { ok: false, error: { code: 'UNKNOWN_TOOL', message: `No such tool: ${toolName}` } };
     }
     const data = await tool.run(event, deps);
+    log.info('mcp_tool_completed', 'MCP tool completed', {
+      tool: toolName,
+      durationMs: Date.now() - startedAt,
+    });
+    log.metric('McpToolInvocation', 1, { tool: toolName, outcome: 'success' });
     return { ok: true, data };
   } catch (error) {
     const toolError = toToolError(error);
     log.error('mcp_tool_failed', 'Tool invocation failed', {
       tool: toolName,
       code: toolError.code,
+      durationMs: Date.now() - startedAt,
     });
+    log.metric('McpToolInvocation', 1, { tool: toolName || 'unknown', outcome: 'failure' });
     return { ok: false, error: toolError };
   }
 }

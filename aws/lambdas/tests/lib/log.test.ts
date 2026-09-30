@@ -40,4 +40,16 @@ describe('createLogger', () => {
     const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
     expect(line.level).toBe(level);
   });
+
+  it('emits an Embedded Metric Format record with low-cardinality dimensions', () => {
+    const logger = createLogger('api');
+    logger.metric('ApiRequest', 1, { outcome: 'success' });
+
+    const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
+    expect(line.service).toBe('api');
+    expect(line.ApiRequest).toBe(1);
+    expect(line.outcome).toBe('success');
+    const aws = line._aws as { CloudWatchMetrics: Array<{ Namespace: string }> };
+    expect(aws.CloudWatchMetrics[0]?.Namespace).toBe('DocIntel');
+  });
 });

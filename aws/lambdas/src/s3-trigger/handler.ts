@@ -21,6 +21,7 @@ const HTTP_STATUS_OK_MAX = 299;
  * rejected the request and the job must be marked FAILED by the caller.
  */
 async function invokeOrchestrator(deps: S3TriggerDeps, jobId: string): Promise<void> {
+  const startedAt = Date.now();
   const result = await deps.agentCore.invoke({
     sessionId: buildRuntimeSessionId(jobId, 'async'),
     payload: { jobId, mode: 'async' },
@@ -31,6 +32,12 @@ async function invokeOrchestrator(deps: S3TriggerDeps, jobId: string): Promise<v
     throw new Error(`Orchestrator invoke returned status ${status ?? 'unknown'}`);
   }
   await result.response?.transformToString('utf-8');
+  log.info('orchestrator_async_accepted', 'Orchestrator accepted async job', {
+    jobId,
+    statusCode: status,
+    durationMs: Date.now() - startedAt,
+  });
+  log.metric('OrchestratorAsyncInvocation', 1, { outcome: 'accepted' });
 }
 
 /** S3 event keys are URL-encoded (spaces become `+`), unlike keys we build ourselves. */
@@ -54,6 +61,7 @@ async function queueAsync(deps: S3TriggerDeps, jobId: string): Promise<void> {
       message: 'Queued for async processing',
     },
   });
+  log.info('job_queued_async', 'Queued uploaded job for async processing', { jobId });
   try {
     await invokeOrchestrator(deps, jobId);
   } catch (error) {
@@ -64,6 +72,11 @@ async function queueAsync(deps: S3TriggerDeps, jobId: string): Promise<void> {
       tool: 's3:ObjectCreated',
       message: `Orchestrator invoke failed: ${message}`,
     });
+    log.error('orchestrator_async_rejected', 'Async orchestrator invocation failed', {
+      jobId,
+      error: message,
+    });
+    log.metric('OrchestratorAsyncInvocation', 1, { outcome: 'failed' });
   }
 }
 
@@ -117,6 +130,16 @@ async function handleRecord(deps: S3TriggerDeps, record: S3EventRecord): Promise
   try {
     const parts = parseUploadKey(key);
     const { fresh } = await markUploaded(deps, parts.jobId, key, record.s3.object.size);
+    log.info('upload_event_processed', 'Processed S3 upload notification', {
+      jobId: parts.jobId,
+      mode: parts.mode,
+      sizeBytes: record.s3.object.size,
+      fresh,
+    });
+    log.metric('UploadNotification', 1, {
+      mode: parts.mode,
+      outcome: fresh ? 'fresh' : 'duplicate',
+    });
     if (fresh && parts.mode === 'async') {
       await queueAsync(deps, parts.jobId);
     }

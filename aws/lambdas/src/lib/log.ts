@@ -16,6 +16,8 @@ export interface Logger {
   info: (event: string, msg: string, fields?: LogFields) => void;
   warn: (event: string, msg: string, fields?: LogFields) => void;
   error: (event: string, msg: string, fields?: LogFields) => void;
+  /** Emit one CloudWatch Embedded Metric Format record. Dimensions must be low-cardinality. */
+  metric: (name: string, value: number, dimensions?: Record<string, string>) => void;
 }
 
 interface LogRecord {
@@ -32,6 +34,33 @@ function emit(record: LogRecord): void {
   console.log(JSON.stringify(line));
 }
 
+function emitMetric(
+  service: string,
+  name: string,
+  value: number,
+  dimensions: Record<string, string>,
+): void {
+  const dimensionNames = Object.keys(dimensions);
+  // Do not add requestId/jobId here: CloudWatch metric dimensions must remain low-cardinality.
+  console.log(
+    JSON.stringify({
+      ...dimensions,
+      [name]: value,
+      _aws: {
+        Timestamp: Date.now(),
+        CloudWatchMetrics: [
+          {
+            Namespace: 'DocIntel',
+            Dimensions: [['service', ...dimensionNames]],
+            Metrics: [{ Name: name, Unit: 'Count' }],
+          },
+        ],
+      },
+      service,
+    }),
+  );
+}
+
 /** Creates a logger bound to a single service name (e.g. "api", "s3-trigger", "mcp-tools"). */
 export function createLogger(service: string): Logger {
   const at =
@@ -43,5 +72,6 @@ export function createLogger(service: string): Logger {
     info: at('info'),
     warn: at('warn'),
     error: at('error'),
+    metric: (name, value, dimensions = {}) => emitMetric(service, name, value, dimensions),
   };
 }

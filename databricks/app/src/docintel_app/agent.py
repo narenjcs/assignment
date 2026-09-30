@@ -9,11 +9,13 @@ AWS as `FAILED` instead of raising (DEVELOPMENT.md G9).
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Any
 
 from docintel_app.deps import Deps
+from docintel_app.observability import elapsed_ms, log_event
 from docintel_app.schemas import JobResult, err_result, ok_result
 from docintel_app.tools import ToolFn
 from docintel_app.tools.enrich import build_enrich_document
@@ -43,10 +45,35 @@ async def run(deps: Deps, job: dict[str, Any]) -> dict[str, Any]:
     job run id).
     """
     job_id = job["job_id"]
+    started_at = time.perf_counter()
+    log_event(
+        logger,
+        "pdf_agent_started",
+        job_id=job_id,
+        run_mode=job.get("run_mode", "sync"),
+        databricks_run_id=job.get("run_id"),
+    )
     try:
-        return await _run_pipeline(deps, job)
+        result = await _run_pipeline(deps, job)
+        log_event(
+            logger,
+            "pdf_agent_completed",
+            job_id=job_id,
+            run_mode=job.get("run_mode", "sync"),
+            duration_ms=elapsed_ms(started_at),
+        )
+        return result
     except Exception as exc:
         logger.exception("pdf agent failed for job %s", job_id)
+        log_event(
+            logger,
+            "pdf_agent_failed",
+            level=logging.ERROR,
+            job_id=job_id,
+            run_mode=job.get("run_mode", "sync"),
+            duration_ms=elapsed_ms(started_at),
+            error_type=type(exc).__name__,
+        )
         await _report_status_best_effort(deps, job_id, "FAILED", message=str(exc))
         return err_result("agent_failed", str(exc))
 
@@ -107,6 +134,8 @@ async def _step(
     deps: Deps, job_id: str, name: str, coro: Awaitable[dict[str, Any]]
 ) -> dict[str, Any]:
     """Await one pipeline tool call, append a job event, and raise if it failed."""
+    started_at = time.perf_counter()
+    log_event(logger, "pdf_pipeline_step_started", job_id=job_id, step=name)
     envelope = await coro
     if not envelope.get("ok"):
         error = envelope.get("error", {})
@@ -114,6 +143,13 @@ async def _step(
     await deps.aws.call(
         "append_job_event",
         {"job_id": job_id, "source": SOURCE, "tool": name, "message": f"{name} completed"},
+    )
+    log_event(
+        logger,
+        "pdf_pipeline_step_completed",
+        job_id=job_id,
+        step=name,
+        duration_ms=elapsed_ms(started_at),
     )
     return envelope
 
@@ -135,6 +171,7 @@ async def _report_status(deps: Deps, job_id: str, status: str, message: str | No
         body["message"] = message
     envelope = await deps.aws.call("update_job_status", body)
     _raise_if_aws_failed("update_job_status", envelope)
+    log_event(logger, "aws_job_status_reported", job_id=job_id, status=status)
 
 
 async def _report_status_best_effort(

@@ -37,7 +37,7 @@ from docintel_app.tools.ingest import build_ingest_pdf
 from docintel_app.tools.persist import build_get_document_result, build_persist_document_result
 from docintel_app.tools.runs import build_get_pdf_run_status, build_run_pdf_agent
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 

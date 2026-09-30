@@ -52,7 +52,7 @@ from docintel_app import agent  # noqa: E402 — import must follow the sys.path
 from docintel_app.config import Settings  # noqa: E402 — same
 from docintel_app.deps import build_deps  # noqa: E402 — same
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 _ARG_COUNT = 11  # argv[0] (script path) + 10 job parameters

@@ -14,16 +14,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Coroutine
 from typing import Any
 
 from bedrock_agentcore import BedrockAgentCoreApp, RequestContext
 from docintel_common import events as sse_events
 from docintel_common.config import get_settings
+from docintel_common.observability import elapsed_ms, log_event
 from tools import mark_job_failed_best_effort, workflow_session
 from workflow import drain, run_chat, run_job
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("orchestrator")
 _background_tasks: set[asyncio.Task] = set()
 
@@ -36,9 +38,12 @@ async def handler(payload: dict, context: RequestContext) -> dict | AsyncIterato
     """Dispatch one job by `mode`: sync/chat stream SSE dicts, async returns immediately."""
     job_id = payload["jobId"]
     mode = payload.get("mode", "sync")
-    logger.info(
-        "orchestrator invoked",
-        extra={"job_id": job_id, "mode": mode, "session_id": context.session_id},
+    log_event(
+        logger,
+        "orchestrator_invoked",
+        job_id=job_id,
+        mode=mode,
+        session_id=context.session_id,
     )
     if mode == "async":
         task_id = app.add_async_task(f"workflow-{job_id}")
@@ -62,14 +67,31 @@ def _schedule_background(coro: Coroutine[Any, Any, None]) -> None:
 async def _sync_stream(job_id: str, mode: str) -> AsyncIterator[dict]:
     """Stream `run_job`'s SSE frames; if opening the session itself fails, still emit
     `error` then `done` (PLAN §2.6) and best-effort mark the job FAILED."""
+    started_at = time.perf_counter()
     try:
         with workflow_session(settings) as deps:
             async for event in run_job(deps, job_id, mode):
                 yield event
+        log_event(
+            logger,
+            "orchestrator_sync_completed",
+            job_id=job_id,
+            mode=mode,
+            duration_ms=elapsed_ms(started_at),
+        )
     except Exception as exc:
         message = str(exc)
-        logger.error("sync session failed", extra={"job_id": job_id, "error": message})
         mark_job_failed_best_effort(settings, job_id, message)
+        log_event(
+            logger,
+            "orchestrator_sync_failed",
+            level=logging.ERROR,
+            job_id=job_id,
+            mode=mode,
+            duration_ms=elapsed_ms(started_at),
+            error_type=type(exc).__name__,
+            error=message,
+        )
         yield sse_events.error_event(job_id, message)
         yield sse_events.done_event(job_id)
 
@@ -94,14 +116,30 @@ async def _run_background(job_id: str, task_id: int) -> None:
     since `drain`/`run_job` never got a chance to (`workflow.py`'s try/except wraps `_run_steps`,
     not `workflow_session` itself).
     """
+    started_at = time.perf_counter()
     try:
         try:
             with workflow_session(settings) as deps:
                 await drain(deps, job_id, "async")
         except Exception as exc:
             message = str(exc)
-            logger.error("async session failed", extra={"job_id": job_id, "error": message})
             mark_job_failed_best_effort(settings, job_id, message)
+            log_event(
+                logger,
+                "orchestrator_async_failed",
+                level=logging.ERROR,
+                job_id=job_id,
+                duration_ms=elapsed_ms(started_at),
+                error_type=type(exc).__name__,
+                error=message,
+            )
+        else:
+            log_event(
+                logger,
+                "orchestrator_async_completed",
+                job_id=job_id,
+                duration_ms=elapsed_ms(started_at),
+            )
     finally:
         app.complete_async_task(task_id)
 
